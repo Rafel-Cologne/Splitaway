@@ -90,6 +90,9 @@ object ReceiptParser {
     private val PHONE_PATTERN   = Regex("""\+?\d[\d\s\-]{7,}""")
     private val POSTCODE_PATTERN = Regex("""\b\d{5}\b""")  // German PLZ
     private val LONG_NUMBER_PATTERN = Regex("""\d{6,}""")  // длинные номера
+    // Единичные цены типа "1,895 EUR/l" (3 знака после запятой = цена за литр/кг)
+    // НЕ матчит "1.234,56" (тысячный + десятичный разделитель)
+    private val UNIT_PRICE_3DEC = Regex("""(?<![,.])\d{1,4}[.,]\d{3}(?![,.\d])""")
 
     /**
      * Распарсить строку в центы. Возвращает null если не похоже на цену.
@@ -102,6 +105,8 @@ object ReceiptParser {
         if (DATE_PATTERN.containsMatchIn(t)) return null
         if (TIME_PATTERN.containsMatchIn(t)) return null
         if (POSTCODE_PATTERN.containsMatchIn(t) && t.length <= 6) return null
+        // Исключить единичные цены "1,895" (EUR/l) — 3 знака после запятой без второго разделителя
+        if (UNIT_PRICE_3DEC.containsMatchIn(t)) return null
 
         val m = PRICE_PATTERN.find(t) ?: return null
         val raw = m.groupValues[1]
@@ -150,6 +155,14 @@ object ReceiptParser {
         // Все слова из одного символа
         val words = t.trim().split(Regex("\\s+"))
         if (words.size >= 3 && words.count { it.length == 1 } > words.size / 2) return true
+
+        // Все слова короткие (< 4 символов) + хотя бы одно «слово» состоит только из спецсимволов
+        // Пример мусора: "% ke os.", "# A B", "© km st"
+        if (words.size >= 2) {
+            val longMeaningfulWords = words.count { w -> w.length >= 4 && w.count { c -> c.isLetter() } >= 2 }
+            val pureSymbolWords    = words.count { w -> w.none { c -> c.isLetterOrDigit() } }
+            if (longMeaningfulWords == 0 && pureSymbolWords >= 1) return true
+        }
 
         return false
     }
@@ -275,9 +288,6 @@ object ReceiptParser {
         // ── 5. Ищем товарные позиции ──
         // Товарные строки: до строки с итогом, не служебные, с ценой справа
         val items = mutableListOf<JSONObject>()
-
-        // Ширина правой колонки (≥ 55% от правого края изображения)
-        val rightColThreshold = imageWidth * 0.55
 
         for (line in allLines) {
             // Не обрабатывать строки ниже итога
