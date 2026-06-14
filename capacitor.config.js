@@ -17,6 +17,8 @@ const config = {
       smallIcon:  'ic_stat_icon_config_sample',
       iconColor:  '#6c63ff',
     },
+    // Нативный OCR плагин (ML Kit Document Scanner + Text Recognition)
+    ReceiptScanner: {},
   },
 };
 

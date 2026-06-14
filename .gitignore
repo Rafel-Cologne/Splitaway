@@ -5,3 +5,12 @@ node_modules/
 dist/
 # Supabase credentials — не коммитим в git
 public/js/sb-config.js
+# Тестовые фото чеков и результаты OCR (могут содержать персональные данные)
+test-receipts/*.jpg
+test-receipts/*.jpeg
+test-receipts/*.png
+test-receipts/*.heic
+test-receipts/results/
+# Android keystore — никогда в git
+*.jks
+*.keystore

@@ -458,12 +458,12 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
         <!-- Две кнопки: камера и галерея -->
         <div style="display:flex;gap:10px">
           <button class="btn btn-p" style="flex:1;gap:8px;padding:14px 10px;flex-direction:column;height:auto"
-            onclick="document.getElementById('sc-file-r-cam').click()">
+            onclick="startReceiptScan('camera')">
             <i data-lucide="camera" style="width:26px;height:26px"></i>
             <span style="font-size:0.8rem">Снять фото</span>
           </button>
           <button class="btn btn-g" style="flex:1;gap:8px;padding:14px 10px;flex-direction:column;height:auto"
-            onclick="document.getElementById('sc-file-r').click()"
+            onclick="startReceiptScan('gallery')"
             ondragover="event.preventDefault();this.style.borderColor='var(--accent)'"
             ondragleave="this.style.borderColor=''"
             ondrop="handleDrop(event,'r');this.style.borderColor=''">
@@ -471,22 +471,31 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
             <span style="font-size:0.8rem">Из галереи</span>
           </button>
         </div>
-        <!-- Камера (capture=environment — задняя камера) -->
+        <!-- Веб-fallback file inputs (используются только вне Android) -->
         <input type="file" id="sc-file-r-cam" accept="image/*" capture="environment" style="display:none" onchange="handleFile(event,'r')">
-        <!-- Галерея -->
         <input type="file" id="sc-file-r" accept="image/*" style="display:none" onchange="handleFile(event,'r')">
         <div id="sc-prev-r" style="display:none">
           <img id="sc-img-r" style="width:100%;border-radius:var(--rsm);max-height:240px;object-fit:contain;background:var(--s1)">
           <div style="display:flex;gap:8px;margin-top:8px">
-            <button class="btn btn-g btn-sm" style="flex:1" onclick="document.getElementById('sc-file-r-cam').click()">
+            <button class="btn btn-g btn-sm" style="flex:1" onclick="startReceiptScan('camera')">
               <i data-lucide="camera" style="width:14px;height:14px"></i> Переснять
             </button>
-            <button class="btn btn-g btn-sm" style="flex:1" onclick="document.getElementById('sc-file-r').click()">
+            <button class="btn btn-g btn-sm" style="flex:1" onclick="startReceiptScan('gallery')">
               <i data-lucide="image" style="width:14px;height:14px"></i> Другое фото
             </button>
           </div>
         </div>
-        <div id="sc-ld-r" class="ld" style="display:none"><div class="spin"></div><span id="sc-ld-r-txt">Распознаём чек...</span></div>
+        <!-- Loader + статус прогресса -->
+        <div id="sc-ld-r" class="ld" style="display:none"><div class="spin"></div><span id="sc-ld-r-txt">Подготовка...</span></div>
+        <!-- Fallback UI: итог найден, позиции нет -->
+        <div id="sc-fallback-ui" style="display:none;flex-direction:column;gap:10px;padding:14px;background:rgba(108,99,255,0.07);border:1px solid rgba(108,99,255,0.2);border-radius:var(--rsm)">
+          <div id="sc-fallback-msg" style="font-size:0.88rem;color:var(--text)"></div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-p btn-sm" style="flex:1" onclick="addFallbackAsOneItem()">Добавить одной суммой</button>
+            <button class="btn btn-g btn-sm" style="flex:1" onclick="hideFallback();showParsed('Позиции чека','receipt')">Вручную</button>
+            <button class="btn btn-g btn-sm" style="flex:1" onclick="hideFallback();startReceiptScan('camera')">Пересканировать</button>
+          </div>
+        </div>
       </div>
       <!-- Menu -->
       <div class="sec" id="sc-menu" style="display:none">
@@ -2423,6 +2432,151 @@ function scanTab(tab,btn){
   document.getElementById('sc-menu').style.display=tab==='menu'?'flex':'none';
   S.scan.mode=tab;
 }
+// ── Точка входа: нажатие «Снять фото» / «Из галереи» ──────────
+// На Android: запускает нативный ML Kit Document Scanner.
+// На вебе: открывает стандартный file picker (fallback).
+async function startReceiptScan(source) {
+  if (window.Capacitor?.isNativePlatform?.()) {
+    await nativeScanReceipt();
+  } else {
+    // Веб-fallback: обычный file input
+    if (source === 'camera') {
+      document.getElementById('sc-file-r-cam').click();
+    } else {
+      document.getElementById('sc-file-r').click();
+    }
+  }
+}
+
+// ── Нативный путь: ML Kit Document Scanner → Text Recognition → ReceiptParser ──
+async function nativeScanReceipt() {
+  const ld    = document.getElementById('sc-ld-r');
+  const ldTxt = document.getElementById('sc-ld-r-txt');
+  const setStatus = msg => { if (ldTxt) ldTxt.textContent = msg; };
+
+  ld.style.display = 'flex';
+  setStatus('Подготовка сканера...');
+
+  try {
+    const { ReceiptScanner } = window.Capacitor.Plugins;
+    if (!ReceiptScanner) throw new Error('ReceiptScanner plugin not available');
+
+    setStatus('Сканируем чек...');
+    const scanData = await ReceiptScanner.scanReceipt();
+
+    if (!scanData.success) throw new Error('Scan returned no result');
+
+    setStatus('Поиск позиций...');
+    const result = scanData.result;
+
+    // Показываем превью (imageUri — content:// URI)
+    if (scanData.imageUri) {
+      const prev  = document.getElementById('sc-prev-r');
+      const imgEl = document.getElementById('sc-img-r');
+      prev.style.display = 'block';
+      // Capacitor convertFileSrc конвертирует content:// в доступный WebView URL
+      imgEl.src = window.Capacitor.convertFileSrc(scanData.imageUri);
+    }
+
+    setStatus('Проверка суммы...');
+    applyReceiptResult(result);
+
+    ld.style.display = 'none';
+
+  } catch (e) {
+    ld.style.display = 'none';
+    if (e.message === 'USER_CANCELLED' || e.message?.includes('cancel')) {
+      // Пользователь отменил — не показываем ошибку
+      return;
+    }
+    console.warn('[ReceiptScanner] Native failed:', e.message);
+    toast('⚠️ Нативный сканер недоступен — используем веб-версию');
+    // Деградируем до веб-fallback
+    document.getElementById('sc-file-r-cam').click();
+  }
+}
+
+// ── Применить результат парсинга (одинаково для нативного и веб пути) ──
+function applyReceiptResult(result) {
+  const warnings = result.warnings || [];
+
+  S.scan.items = (result.items || []).map(it => ({
+    name:        it.name || '',
+    price:       it.totalPrice || 0,
+    qty:         it.quantity || 1,
+    needsReview: it.needsReview || !it.name || it.confidence < 0.7,
+    confidence:  it.confidence || 0,
+    rawText:     it.rawText || '',
+    assignments: {}
+  }));
+
+  S.scan.receiptMeta = {
+    provider: result.provider,
+    merchant: result.merchant,
+    date:     result.date,
+    total:    result.total,
+    currency: result.currency || 'EUR'
+  };
+
+  // Предупреждение о расхождении суммы
+  warnings.forEach(w => {
+    if (w.code === 'TOTAL_MISMATCH') {
+      toast(`⚠️ Сумма позиций ${fm(w.calculated)}€ ≠ итог чека ${fm(w.expected)}€ — проверьте`);
+    }
+  });
+
+  // Авто-заполнить дату и магазин
+  if (result.date) {
+    const dateEl = document.getElementById('sc-exp-date');
+    if (dateEl) {
+      // Конвертируем немецкий формат DD.MM.YYYY → YYYY-MM-DD для input[type=date]
+      const dParts = result.date.match(/(\d{2})[./](\d{2})[./](\d{4})/);
+      if (dParts) dateEl.value = `${dParts[3]}-${dParts[2]}-${dParts[1]}`;
+    }
+  }
+  if (result.merchant) {
+    const nameEl = document.getElementById('sc-exp-name');
+    if (nameEl && !nameEl.value) nameEl.value = result.merchant;
+  }
+
+  // Проверка NO_ITEMS_FOUND_TOTAL_KNOWN → показать fallback UI
+  const noItemsWarning = warnings.find(w => w.code === 'NO_ITEMS_FOUND_TOTAL_KNOWN');
+  if (noItemsWarning && S.scan.items.length === 0) {
+    showFallbackUI(noItemsWarning.total);
+    return;
+  }
+
+  showParsed('Позиции чека', 'receipt');
+}
+
+function showFallbackUI(total) {
+  const el  = document.getElementById('sc-fallback-ui');
+  const msg = document.getElementById('sc-fallback-msg');
+  if (!el || !msg) return;
+  msg.textContent = `Позиции не распознаны. Общая сумма найдена: ${fm(total)}€`;
+  S.scan._fallbackTotal = total;
+  el.style.display = 'flex';
+}
+
+function hideFallback() {
+  const el = document.getElementById('sc-fallback-ui');
+  if (el) el.style.display = 'none';
+}
+
+function addFallbackAsOneItem() {
+  const total = S.scan._fallbackTotal || 0;
+  S.scan.items = [{
+    name:        'Позиция чека',
+    price:       total,
+    qty:         1,
+    needsReview: true,
+    confidence:  0.5,
+    assignments: {}
+  }];
+  hideFallback();
+  showParsed('Позиции чека', 'receipt');
+}
+
 async function handleFile(ev,m){
   const file=ev.target.files[0];if(!file)return;
   const prev=document.getElementById(m==='r'?'sc-prev-r':'sc-prev-m');
@@ -2542,40 +2696,88 @@ async function scanAI(b64,mt,m){
   ld.style.display='flex';
   const setStatus=(msg)=>{if(ldTxt)ldTxt.textContent=msg;};
 
-  // Попытка 1: Claude Vision API (через backend-прокси /api/anthropic)
+  // ── Попытка 1: /api/receipts/analyze (Azure DI → Claude каскад на сервере) ──
+  if(m==='r'){
+    try{
+      setStatus('Распознаём чек...');
+      const resp=await fetch(`${API_BASE}/api/receipts/analyze`,{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({image:b64,mediaType:mt})
+      });
+      const result=await resp.json();
+      if(result.error&&!result.items?.length)throw new Error(result.error);
+
+      // Маппинг нормализованного ответа → S.scan.items
+      S.scan.items=(result.items||[]).map(it=>({
+        name:      it.name||'',
+        price:     it.totalPrice||0,
+        qty:       it.quantity||1,
+        needsReview: it.needsReview||(it.confidence<0.55)||!it.name,
+        confidence:it.confidence||0,
+        rawText:   it.rawText||'',
+        assignments:{}
+      }));
+
+      // Сохранить метаданные чека
+      S.scan.receiptMeta={
+        provider:  result.provider,
+        merchant:  result.merchant,
+        date:      result.date,
+        total:     result.total,
+        currency:  result.currency||'EUR'
+      };
+
+      // Предупреждение о расхождении суммы
+      (result.warnings||[]).forEach(w=>{
+        if(w.code==='TOTAL_MISMATCH'){
+          toast(`⚠️ Сумма позиций ${fm(w.calculated)}€ ≠ итог чека ${fm(w.expected)}€ — проверьте`);
+        }
+      });
+
+      // Авто-подставить дату из чека
+      if(result.date){
+        const dateEl=document.getElementById('sc-exp-date');
+        if(dateEl)dateEl.value=result.date;
+      }
+      // Авто-подставить название магазина
+      if(result.merchant){
+        const nameEl=document.getElementById('sc-exp-name');
+        if(nameEl&&!nameEl.value)nameEl.value=result.merchant;
+      }
+
+      ld.style.display='none';
+      showParsed('Позиции чека','receipt');
+      return;
+    }catch(e){
+      console.warn('[receipts-analyze] failed:',e.message);
+      setStatus('Резервный OCR...');
+      // НЕ показываем toast здесь — fallback ниже попробует Claude напрямую
+    }
+  }
+
+  // ── Попытка 2: Claude Vision (для меню и как fallback чека) ──
   {
     try{
       setStatus('AI распознаёт...');
       const prompt=m==='r'
         ?`You are a receipt parser. Extract purchased items from this receipt photo.
 Receipt may be in German, Russian, Italian, French, Spanish, English or other language.
-This could be a restaurant bill, supermarket receipt, gas station receipt, etc.
 
 IMPORTANT RULES:
-- price = the monetary amount in EUR/USD/RUB etc. (a realistic purchase price, typically 0.50–500)
-- NEVER use document numbers, receipt numbers, transaction IDs, or article codes as prices (these are large integers like 6185, 12345 — not prices)
-- On gas station receipts: the product line looks like "*000001 Super 95   26,87 EUR" — price is 26.87, not the article number
-- qty=1 unless explicit quantity shown (e.g. "3x Coffee")
-- price = total for that line (qty × unit price)
+- price = monetary amount (realistic: 0.50–500 EUR/USD/RUB)
+- NEVER use document numbers, receipt numbers, article codes as prices
+- Gas station: "*000001 Super 95  26,87 EUR" → name="Super 95", price=26.87
+- qty=1 unless explicit quantity shown
 
-EXCLUDE these line types (do not include in output):
-- Totals, subtotals, grand totals (Gesamt, Total, Summe, Итого)
-- Taxes (MwSt, TVA, IVA, НДС, USt)
-- Receipt/document numbers (Beleg-Nr, Bon-Nr, Kassenbon, Rechnungsnr, Transaction ID)
-- Payment method lines (VISA, Mastercard, EC-Karte, Cash, Bar, Debit)
-- Tip, service charge, Trinkgeld
-- Store name, address, phone, website
-- Date, time, cashier name
-- Thank-you messages
+EXCLUDE: totals, taxes (MwSt/НДС/TVA), receipt numbers (Beleg-Nr), payment lines (VISA/EC), address, date, thank-you messages
 
-Return ONLY valid JSON, no markdown, no explanation:
-{"items":[{"name":"item name in original language","price":0.00,"qty":1}]}`
+Return ONLY valid JSON:
+{"items":[{"name":"item name","price":0.00,"qty":1}]}`
         :'This is a restaurant menu page (may be in any language). Extract ALL dishes/drinks with prices. Return ONLY valid JSON: {"items":[{"name":"dish name","price":0.00,"desc":"short description or empty"},...]}';
       const resp=await fetch(`${API_BASE}/api/anthropic`,{
         method:'POST',
-        headers:{
-          'Content-Type':'application/json'
-        },
+        headers:{'Content-Type':'application/json'},
         body:JSON.stringify({
           model:'claude-3-5-haiku-20241022',
           max_tokens:2000,
@@ -2591,18 +2793,20 @@ Return ONLY valid JSON, no markdown, no explanation:
       const parsed=JSON.parse(txt);
       const rawItems=parsed.items||[];
       S.scan.items=rawItems.map(it=>({
-        name:it.name||'Позиция',
+        name:it.name||'',
         price:parseFloat(it.price)||0,
         qty:parseInt(it.qty)||1,
         desc:it.desc||'',
+        needsReview:false,
+        confidence:0.70,
         assignments:{}
-      }));
+      })).filter(it=>it.price>0&&it.name);
       ld.style.display='none';
       if(m==='r'){showParsed('Позиции чека','receipt');}
       else{showMenuPicker();}
       return;
     }catch(e){
-      console.warn('[AI] Ошибка Claude Vision, пробуем Tesseract:',e.message);
+      console.warn('[AI] Claude Vision failed:',e.message);
       toast('⚠️ AI недоступен — результат может быть неточным');
       setStatus('Резервный OCR...');
     }
@@ -2722,20 +2926,27 @@ function renderScanItems(){
         </div>`;
       }
     }).join('');
-    // Unassigned warning
+    // Unassigned warning + needsReview badge
     let warn='';
     if(qty===1&&!it.assignedTo) warn='<span style="font-size:0.67rem;color:var(--red);white-space:nowrap">⚠️</span>';
     if(qty>1){
       const assigned=Object.values(it.assignments||{}).reduce((s,v)=>s+v,0);
       if(assigned<qty)warn=`<span style="font-size:0.67rem;color:var(--amber);white-space:nowrap">⚠️ ${qty-assigned} ост.</span>`;
     }
-    return `<div style="border-bottom:1px solid var(--b1);padding:9px 0">
+    // needsReview: Azure вернул низкий confidence — просим проверить вручную
+    const reviewBorder=it.needsReview?'border-left:3px solid var(--amber);padding-left:8px;':'';
+    const reviewHint=it.needsReview
+      ?`<div style="font-size:0.67rem;color:var(--amber);margin-bottom:4px">🔍 Проверьте название и цену</div>`:'';
+    const nameDisplay=it.name||'';
+    const namePlaceholder=it.needsReview?'Название не распознано — введите вручную':'Название позиции';
+    return `<div style="border-bottom:1px solid var(--b1);padding:9px 0;${reviewBorder}">
+      ${reviewHint}
       <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
-        <input style="flex:1;background:transparent;border:none;border-bottom:1px solid var(--b2);
+        <input style="flex:1;background:transparent;border:none;border-bottom:1px solid ${it.needsReview?'var(--amber)':'var(--b2)'};
                       color:var(--text);font-size:0.84rem;padding:3px 4px;outline:none;font-family:inherit;
                       min-width:0"
-               value="${escHtml(it.name)}" oninput="S.scan.items[${i}].name=this.value"
-               placeholder="Название позиции">
+               value="${escHtml(nameDisplay)}" oninput="S.scan.items[${i}].name=this.value;S.scan.items[${i}].needsReview=false;renderScanItems()"
+               placeholder="${namePlaceholder}">
         ${qty>1?`<input class="rip" style="width:38px;flex-shrink:0;text-align:center" type="number" min="1" max="99"
                value="${qty}" title="Количество"
                oninput="S.scan.items[${i}].qty=parseInt(this.value)||1;renderScanItems()">

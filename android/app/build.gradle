@@ -55,6 +55,19 @@ dependencies {
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
     implementation project(':capacitor-cordova-android-plugins')
+
+    // ── Google ML Kit — бесплатный локальный OCR ──────────────────
+    // Document Scanner: автоматическая обрезка, исправление перспективы
+    implementation 'com.google.android.gms:play-services-mlkit-document-scanner:16.0.0-beta1'
+    // Text Recognition v2: Latin script (DE/EN/ES/IT/FR)
+    implementation 'com.google.mlkit:text-recognition:16.0.1'
+    // Activity Result API (нужен для Document Scanner)
+    implementation 'androidx.activity:activity-ktx:1.9.0'
+    // Kotlin coroutines
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3'
+    // await() на Tasks (нужен для ML Kit .process().await())
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3'
+    // ─────────────────────────────────────────────────────────────
 }
 
 apply from: 'capacitor.build.gradle'

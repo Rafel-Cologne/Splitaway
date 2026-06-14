@@ -13,3 +13,9 @@
   from   = "/api/anthropic"
   to     = "/.netlify/functions/anthropic-proxy"
   status = 200
+
+# Receipt Analysis: Azure DI → Claude cascade
+[[redirects]]
+  from   = "/api/receipts/analyze"
+  to     = "/.netlify/functions/receipts-analyze"
+  status = 200
