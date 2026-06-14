@@ -13,7 +13,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <!-- lucide: defer — не блокирует парсинг, загружается параллельно -->
-<script defer src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+<script defer src="https://unpkg.com/lucide@0.383.0/dist/umd/lucide.js"></script>
 <!-- qrcodejs и tesseract.js: загружаются динамически по требованию (см. loadQRCode/loadTesseract) -->
 <script src="/js/sb-config.js"></script>
 <script src="/js/sb-client.js"></script>
@@ -585,6 +585,14 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
           <span class="bdg bdg-p" id="set-archive-cnt"></span>
         </div>
         <div id="set-archive" style="display:flex;flex-direction:column;gap:7px"></div>
+      </div>
+      <!-- Export -->
+      <div class="sec">
+        <div class="sec-hd"><span class="sec-ttl">Экспорт</span></div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-s btn-fw" onclick="exportTrip('text')"><i data-lucide="clipboard-copy" style="width:14px;height:14px"></i> Текст</button>
+          <button class="btn btn-s btn-fw" onclick="exportTrip('csv')"><i data-lucide="table" style="width:14px;height:14px"></i> CSV</button>
+        </div>
       </div>
       <!-- Theme -->
       <div class="sec">
@@ -2384,6 +2392,74 @@ function saveTripSettings(){
   save();toast('✅ Поездка обновлена')
 }
 
+// =======================================================
+// ЭКСПОРТ РАСХОДОВ
+// =======================================================
+function exportTrip(fmt) {
+  if (!S.trip || !S.expenses.length) { toast('⚠️ Нет расходов для экспорта'); return; }
+  const bal = calcBal();
+  const debts = simplify(bal);
+  const tripName = S.trip.name || 'Поездка';
+  const dest = S.trip.dest || '';
+
+  if (fmt === 'csv') {
+    const rows = [
+      ['Дата', 'Название', 'Сумма (€)', 'Оплатил', 'Участники', 'Комментарий'],
+      ...S.expenses.map(e => [
+        e.date || '',
+        e.name,
+        fm(e.amount),
+        e.paidBy,
+        (e.participants || []).join('; '),
+        e.comment || ''
+      ])
+    ];
+    const csv = rows.map(r => r.map(c => '"' + String(c).replace(/"/g, '""') + '"').join(',')).join('\n');
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }); // BOM for Excel
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = tripName.replace(/\s+/g, '_') + '_расходы.csv';
+    a.click(); URL.revokeObjectURL(url);
+    toast('✅ CSV сохранён');
+    return;
+  }
+
+  // Текстовый формат
+  const total = S.expenses.reduce((s, e) => s + e.amount, 0);
+  const lines = [
+    `✈️ ${tripName}${dest ? ' — ' + dest : ''}`,
+    `Участники: ${S.members.map(m => m.name).join(', ')}`,
+    `Всего расходов: ${fm(total)} €`,
+    '',
+    '── РАСХОДЫ ──',
+    ...S.expenses.map(e =>
+      `${e.date ? fdate(e.date) + ' ' : ''}${e.name}: ${fm(e.amount)} € (${e.paidBy})`
+    ),
+    '',
+    '── ДОЛГИ ──',
+    ...(debts.length
+      ? debts.map(d => `${d.from} → ${d.to}: ${fm(d.amount)} €`)
+      : ['Все расквитаны ✅'])
+  ];
+  const text = lines.join('\n');
+
+  if (navigator.share) {
+    navigator.share({ title: tripName, text }).catch(() => {});
+    return;
+  }
+  navigator.clipboard.writeText(text)
+    .then(() => toast('✅ Скопировано в буфер обмена'))
+    .catch(() => {
+      // Fallback: скачать как .txt
+      const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = tripName.replace(/\s+/g, '_') + '_расходы.txt';
+      a.click(); URL.revokeObjectURL(url);
+      toast('✅ Файл сохранён');
+    });
+}
+
 async function deleteTrip(){
   if(!S.isAdmin){toast('❌ Только Админ');return}
   if(!confirm(`Удалить поездку "${S.trip?.name}"? Это действие нельзя отменить.`))return;
@@ -2485,11 +2561,12 @@ async function nativeScanReceipt() {
 
   } catch (e) {
     ld.style.display = 'none';
-    if (e.message === 'USER_CANCELLED' || e.message?.includes('cancel')) {
+    const eCode = e.code || e.errorMessage || e.message || '';
+    if (eCode === 'USER_CANCELLED' || eCode.toLowerCase().includes('cancel')) {
       // Пользователь отменил — не показываем ошибку
       return;
     }
-    console.warn('[ReceiptScanner] Native failed:', e.message);
+    console.warn('[ReceiptScanner] Native failed:', eCode, e.message);
     toast('⚠️ Нативный сканер недоступен — используем веб-версию');
     // Деградируем до веб-fallback
     document.getElementById('sc-file-r-cam').click();
@@ -2530,8 +2607,11 @@ function applyReceiptResult(result) {
     const dateEl = document.getElementById('sc-exp-date');
     if (dateEl) {
       // Конвертируем немецкий формат DD.MM.YYYY → YYYY-MM-DD для input[type=date]
-      const dParts = result.date.match(/(\d{2})[./](\d{2})[./](\d{4})/);
-      if (dParts) dateEl.value = `${dParts[3]}-${dParts[2]}-${dParts[1]}`;
+      const dParts = result.date.match(/(\d{2})[./](\d{2})[./](\d{2,4})/);
+      if (dParts) {
+        const yr = dParts[3].length === 2 ? '20' + dParts[3] : dParts[3];
+        dateEl.value = `${yr}-${dParts[2]}-${dParts[1]}`;
+      }
     }
   }
   if (result.merchant) {
@@ -2845,31 +2925,7 @@ Return ONLY valid JSON:
     toast('❌ Ошибка — введите текст вручную');
   }
 }
-async function parseText(){
-  const t=document.getElementById('sc-txt').value.trim();
-  if(!t){toast('⚠️ Введите текст');return}
-  // Сначала пробуем Claude через backend-прокси
-  {
-    try{
-      toast('🔄 AI разбирает текст...');
-      const r=await fetch(`${API_BASE}/api/anthropic`,{
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({model:'claude-3-5-haiku-20241022',max_tokens:1000,messages:[{role:'user',content:`Parse this receipt/bill text. Return ONLY valid JSON: {"items":[{"name":"item name","price":0.00,"qty":1},...]}. qty>1 if quantity shown. price=total for that line. Exclude totals and taxes.\n\n${t}`}]})
-      });
-      const d=await r.json();
-      if(d.error)throw new Error(d.error.message);
-      const txt=(d.content?.[0]?.text||'').replace(/```json|```/g,'').trim();
-      const parsed=JSON.parse(txt);
-      S.scan.items=(parsed.items||[]).map(it=>({name:it.name,price:parseFloat(it.price)||0,qty:parseInt(it.qty)||1,assignments:{}}));
-      showParsed('Позиции',S.scan.mode);return;
-    }catch(e){console.warn('[AI text parse]',e)}
-  }
-  // Regex парсер
-  const items=parseReceiptText(t);
-  if(items.length){S.scan.items=items;showParsed('Позиции',S.scan.mode);return}
-  toast('⚠️ Формат: "Название   12.90" — по одной позиции на строку')
-}
+// parseText removed — replaced by nativeScanReceipt
 
 function escHtml(s){return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
 
@@ -3739,19 +3795,4 @@ function init(){
       try{
         const u=new URL(data.url);
         const tc=u.searchParams.get('trip');
-        const tok=u.searchParams.get('token');
-        if(tc){
-          if(tok)window._pendingInviteToken=tok;
-          showOb('ob-s1');
-          document.getElementById('ob-code').value=tc.toUpperCase();
-          joinTrip();
-        }
-      }catch(e){console.warn('[Cap] appUrlOpen parse error:',e)}
-    });
-  }
-}
-// Запускаем после загрузки всех defer-скриптов (в т.ч. lucide)
-document.addEventListener('DOMContentLoaded', init);
-</script>
-</body>
-</html>
+ 
