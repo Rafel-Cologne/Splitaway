@@ -12,8 +12,8 @@
 <link rel="apple-touch-icon" href="/icons/icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<!-- lucide: defer — не блокирует парсинг, загружается параллельно -->
-<script defer src="https://unpkg.com/lucide@0.383.0/dist/umd/lucide.js"></script>
+<!-- lucide: локальная копия — работает офлайн и в APK без CDN -->
+<script defer src="/js/lucide.js"></script>
 <!-- qrcodejs и tesseract.js: загружаются динамически по требованию (см. loadQRCode/loadTesseract) -->
 <script src="/js/sb-config.js"></script>
 <script src="/js/sb-client.js"></script>
@@ -487,6 +487,16 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
         </div>
         <!-- Loader + статус прогресса -->
         <div id="sc-ld-r" class="ld" style="display:none"><div class="spin"></div><span id="sc-ld-r-txt">Подготовка...</span></div>
+        <!-- OCR error UI: сканер недоступен или зависание -->
+        <div id="sc-ocr-error-ui" style="display:none;flex-direction:column;gap:10px;padding:14px;background:rgba(255,95,110,0.07);border:1px solid rgba(255,95,110,0.2);border-radius:var(--rsm)">
+          <div id="sc-ocr-error-msg" style="font-size:0.88rem;color:var(--text)">Не удалось распознать чек.</div>
+          <div style="font-size:0.82rem;color:var(--t2)">Попробуйте ещё раз или добавьте расход вручную.</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-p btn-sm" style="flex:1" onclick="document.getElementById('sc-ocr-error-ui').style.display='none';startReceiptScan('camera')">Повторить</button>
+            <button class="btn btn-g btn-sm" style="flex:1" onclick="document.getElementById('sc-ocr-error-ui').style.display='none';startReceiptScan('gallery')">Другое фото</button>
+            <button class="btn btn-g btn-sm" style="flex:1" onclick="document.getElementById('sc-ocr-error-ui').style.display='none';showParsed('Ручной ввод','receipt')">Ввести вручную</button>
+          </div>
+        </div>
         <!-- Fallback UI: итог найден, позиции нет -->
         <div id="sc-fallback-ui" style="display:none;flex-direction:column;gap:10px;padding:14px;background:rgba(108,99,255,0.07);border:1px solid rgba(108,99,255,0.2);border-radius:var(--rsm)">
           <div id="sc-fallback-msg" style="font-size:0.88rem;color:var(--text)"></div>
@@ -2526,21 +2536,37 @@ async function startReceiptScan(source) {
 
 // ── Нативный путь: ML Kit Document Scanner → Text Recognition → ReceiptParser ──
 async function nativeScanReceipt() {
-  const ld    = document.getElementById('sc-ld-r');
-  const ldTxt = document.getElementById('sc-ld-r-txt');
+  const ld     = document.getElementById('sc-ld-r');
+  const ldTxt  = document.getElementById('sc-ld-r-txt');
+  const errUi  = document.getElementById('sc-ocr-error-ui');
+  const errMsg = document.getElementById('sc-ocr-error-msg');
   const setStatus = msg => { if (ldTxt) ldTxt.textContent = msg; };
 
+  // Сбрасываем предыдущий error UI
+  if (errUi) errUi.style.display = 'none';
   ld.style.display = 'flex';
   setStatus('Подготовка сканера...');
 
+  // Таймаут 35 секунд — если нативный стек завис, разблокируем UI
+  const TIMEOUT_MS = 35_000;
+  let _timeoutId;
+  const timeoutPromise = new Promise((_, rej) => {
+    _timeoutId = setTimeout(
+      () => rej(Object.assign(new Error('TIMEOUT'), { code: 'TIMEOUT' })),
+      TIMEOUT_MS
+    );
+  });
+
   try {
     const { ReceiptScanner } = window.Capacitor.Plugins;
-    if (!ReceiptScanner) throw new Error('ReceiptScanner plugin not available');
+    if (!ReceiptScanner) throw Object.assign(new Error('Plugin not found'), { code: 'NO_PLUGIN' });
 
     setStatus('Сканируем чек...');
-    const scanData = await ReceiptScanner.scanReceipt();
+    // Promise.race: либо сканер ответит, либо сработает таймаут
+    const scanData = await Promise.race([ReceiptScanner.scanReceipt(), timeoutPromise]);
+    clearTimeout(_timeoutId);
 
-    if (!scanData.success) throw new Error('Scan returned no result');
+    if (!scanData.success) throw Object.assign(new Error('No result'), { code: 'NO_RESULT' });
 
     setStatus('Поиск позиций...');
     const result = scanData.result;
@@ -2556,20 +2582,34 @@ async function nativeScanReceipt() {
 
     setStatus('Проверка суммы...');
     applyReceiptResult(result);
-
     ld.style.display = 'none';
 
   } catch (e) {
+    clearTimeout(_timeoutId);
     ld.style.display = 'none';
-    const eCode = e.code || e.errorMessage || e.message || '';
-    if (eCode === 'USER_CANCELLED' || eCode.toLowerCase().includes('cancel')) {
-      // Пользователь отменил — не показываем ошибку
-      return;
+
+    const eCode = (e.code || e.errorMessage || e.message || '').toString();
+
+    // Пользователь сам закрыл сканер — молча выходим
+    if (eCode === 'USER_CANCELLED' || eCode.toLowerCase().includes('cancel')) return;
+
+    console.warn('[ReceiptScanner] failed:', eCode, e);
+
+    // Формируем понятное сообщение
+    let userMsg;
+    if (eCode === 'TIMEOUT') {
+      userMsg = 'Распознавание заняло слишком много времени. Попробуйте ещё раз.';
+    } else if (eCode === 'NO_PLUGIN') {
+      userMsg = 'Сканер недоступен на этом устройстве.';
+    } else if (eCode.includes('OOM') || eCode.includes('OutOfMemory')) {
+      userMsg = 'Изображение слишком большое. Попробуйте другое фото.';
+    } else {
+      userMsg = `Не удалось распознать чек (${eCode}).`;
     }
-    console.warn('[ReceiptScanner] Native failed:', eCode, e.message);
-    toast('⚠️ Нативный сканер недоступен — используем веб-версию');
-    // Деградируем до веб-fallback
-    document.getElementById('sc-file-r-cam').click();
+
+    // Показываем error UI с кнопками — не оставляем пользователя в тупике
+    if (errMsg) errMsg.textContent = userMsg;
+    if (errUi)  errUi.style.display = 'flex';
   }
 }
 

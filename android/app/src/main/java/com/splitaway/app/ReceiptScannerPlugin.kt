@@ -123,9 +123,10 @@ class ReceiptScannerPlugin : Plugin() {
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 runOcrAndResolve(call, imageUri)
-            } catch (e: Exception) {
-                Log.e(TAG, "OCR coroutine crashed", e)
-                call.reject("OCR_CRASH", e.message ?: "unknown error")
+            } catch (e: Throwable) {
+                // Ловим Throwable (включая OutOfMemoryError, NoClassDefFoundError и т.д.)
+                Log.e(TAG, "OCR coroutine crashed: ${e.javaClass.simpleName}: ${e.message}", e)
+                call.reject("OCR_CRASH", "${e.javaClass.simpleName}: ${e.message ?: "unknown"}")
             }
         }
     }
