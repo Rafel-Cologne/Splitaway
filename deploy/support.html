@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Поддержка — Splitaway</title>
+<style>
+  :root { --bg: #0a0a0f; --bg2: #13131a; --t1: #f0f0f8; --t2: #a0a0b8; --accent: #6c63ff; --green: #4caf81; }
+  @media (prefers-color-scheme: light) {
+    :root { --bg: #f4f4fb; --bg2: #ffffff; --t1: #1a1a2e; --t2: #555570; }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--t1); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; line-height: 1.7; padding: 0 0 60px; }
+  header { background: var(--bg2); border-bottom: 1px solid rgba(108,99,255,.2); padding: 18px 24px; display: flex; align-items: center; gap: 14px; }
+  header a { color: var(--accent); text-decoration: none; font-size: 0.9rem; }
+  header h1 { font-size: 1.1rem; font-weight: 700; }
+  main { max-width: 720px; margin: 0 auto; padding: 36px 24px; }
+  h2 { font-size: 1.3rem; font-weight: 700; margin: 32px 0 12px; color: var(--accent); }
+  h3 { font-size: 1rem; font-weight: 700; margin: 20px 0 8px; }
+  p { margin-bottom: 14px; color: var(--t2); }
+  ul { margin: 0 0 14px 22px; color: var(--t2); }
+  li { margin-bottom: 6px; }
+  strong { color: var(--t1); }
+  .contact-card { background: var(--bg2); border: 1px solid rgba(108,99,255,.25); border-radius: 14px; padding: 24px; margin: 24px 0; }
+  .contact-card h3 { margin: 0 0 8px; color: var(--t1); }
+  .contact-card a { color: var(--accent); font-weight: 600; }
+  .faq-item { background: var(--bg2); border-radius: 12px; padding: 18px 20px; margin-bottom: 12px; }
+  .faq-item h3 { font-size: 0.95rem; margin: 0 0 8px; color: var(--t1); }
+  .faq-item p { margin: 0; font-size: 0.9rem; }
+</style>
+</head>
+<body>
+<header>
+  <a href="/">← Splitaway</a>
+  <h1>Поддержка</h1>
+</header>
+<main>
+
+  <div class="contact-card">
+    <h3>📧 Написать нам</h3>
+    <p style="margin:0;color:var(--t2)">По вопросам работы приложения, сообщениям об ошибках и предложениям:</p>
+    <p style="margin:8px 0 0"><a href="mailto:rafaelbabaew@googlemail.com">rafaelbabaew@googlemail.com</a></p>
+  </div>
+
+  <h2>Часто задаваемые вопросы</h2>
+
+  <div class="faq-item">
+    <h3>Как пригласить друзей в поездку?</h3>
+    <p>Откройте Настройки → нажмите иконку QR-кода. Поделитесь ссылкой или QR-кодом с участниками. По ссылке они автоматически попадут в вашу поездку.</p>
+  </div>
+
+  <div class="faq-item">
+    <h3>Данные не синхронизируются между устройствами</h3>
+    <p>Убедитесь, что у вас есть интернет-соединение. Иконка в правом верхнем углу показывает статус: зелёная — онлайн, красная — офлайн. При офлайне данные сохраняются локально и синхронизируются при восстановлении связи.</p>
+  </div>
+
+  <div class="faq-item">
+    <h3>Я случайно вышел из поездки. Как вернуться?</h3>
+    <p>Попросите организатора прислать ссылку-приглашение ещё раз. Перейдите по ссылке — вы автоматически попадёте обратно в поездку и выберете своё имя.</p>
+  </div>
+
+  <div class="faq-item">
+    <h3>OCR не распознаёт чек</h3>
+    <p>Убедитесь что изображение чёткое и хорошо освещённое. Приложение использует AI (Claude) для распознавания — результат зависит от качества фото. Вы всегда можете ввести позиции вручную.</p>
+  </div>
+
+  <div class="faq-item">
+    <h3>Как удалить поездку?</h3>
+    <p>Только организатор может удалить поездку. Откройте Настройки → прокрутите вниз → «Удалить поездку». Это действие необратимо и удаляет все данные из базы.</p>
+  </div>
+
+  <div class="faq-item">
+    <h3>Приложение не открывается офлайн</h3>
+    <p>После первого открытия приложение кэшируется для офлайн-работы. Если этого не произошло — откройте приложение онлайн хотя бы раз, затем браузер сохранит его для использования без интернета.</p>
+  </div>
+
+  <div class="faq-item">
+    <h3>Как добавить приложение на главный экран?</h3>
+    <p><strong>Android (Chrome):</strong> меню ⋮ → «Добавить на главный экран».<br>
+    <strong>iOS (Safari):</strong> кнопка «Поделиться» → «На экран «Домой»».</p>
+  </div>
+
+  <div class="faq-item">
+    <h3>Безопасны ли мои данные?</h3>
+    <p>Данные доступны только участникам, у которых есть ссылка-приглашение. Все запросы к базе данных проходят проверку токена. Подробнее — в нашей <a href="/privacy.html" style="color:var(--accent)">Политике конфиденциальности</a>.</p>
+  </div>
+
+  <h2>Правовые документы</h2>
+  <ul>
+    <li><a href="/privacy.html" style="color:var(--accent)">Политика конфиденциальности</a></li>
+    <li><a href="/terms.html" style="color:var(--accent)">Условия использования</a></li>
+  </ul>
+
+</main>
+</body>
+</html>

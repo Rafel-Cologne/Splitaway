@@ -1,0 +1,15 @@
+[build]
+  publish = "public"
+  functions = "netlify/functions"
+
+# SPA fallback: все маршруты → index.html (кроме файлов и функций)
+[[redirects]]
+  from   = "/*"
+  to     = "/index.html"
+  status = 200
+
+# Короткий alias для функции: /api/anthropic → Netlify Function
+[[redirects]]
+  from   = "/api/anthropic"
+  to     = "/.netlify/functions/anthropic-proxy"
+  status = 200

@@ -1,0 +1,11 @@
+{
+  "liveServer.settings.port": 3000,
+  "liveServer.settings.root": "/public",
+  "liveServer.settings.open": true,
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.tabSize": 2,
+  "files.associations": {
+    "*.html": "html"
+  }
+}

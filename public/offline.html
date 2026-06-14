@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Splitaway — Офлайн</title>
+<style>
+  body { font-family: 'Sora', sans-serif; background: #0a0a0f; color: #f0f0f8;
+         display: flex; align-items: center; justify-content: center;
+         min-height: 100vh; margin: 0; text-align: center; padding: 24px; }
+  .icon { font-size: 4rem; margin-bottom: 16px; }
+  h1   { font-size: 1.5rem; font-weight: 700; margin-bottom: 8px; }
+  p    { color: rgba(240,240,248,0.55); font-size: 0.9rem; margin-bottom: 24px; }
+  button { background: #6c63ff; color: #fff; border: none; border-radius: 12px;
+           padding: 13px 28px; font-size: 0.9rem; font-weight: 600;
+           cursor: pointer; font-family: inherit; }
+  button:hover { background: #8b83ff; }
+</style>
+</head>
+<body>
+  <div>
+    <div class="icon">✈️</div>
+    <h1>Нет подключения</h1>
+    <p>Splitaway работает офлайн.<br>Все данные сохранены и синхронизируются<br>при восстановлении интернета.</p>
+    <button onclick="location.reload()">Попробовать снова</button>
+  </div>
+</body>
+</html>

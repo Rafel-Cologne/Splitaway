@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "dev",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["node_modules/live-server/live-server.js", "public", "--port=3000", "--no-browser"],
+      "port": 3000
+    }
+  ]
+}

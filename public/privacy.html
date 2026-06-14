@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Политика конфиденциальности — Splitaway</title>
+<style>
+  :root { --bg: #0a0a0f; --bg2: #13131a; --t1: #f0f0f8; --t2: #a0a0b8; --accent: #6c63ff; }
+  @media (prefers-color-scheme: light) {
+    :root { --bg: #f4f4fb; --bg2: #ffffff; --t1: #1a1a2e; --t2: #555570; }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--t1); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; line-height: 1.7; padding: 0 0 60px; }
+  header { background: var(--bg2); border-bottom: 1px solid rgba(108,99,255,.2); padding: 18px 24px; display: flex; align-items: center; gap: 14px; }
+  header a { color: var(--accent); text-decoration: none; font-size: 0.9rem; }
+  header h1 { font-size: 1.1rem; font-weight: 700; }
+  main { max-width: 720px; margin: 0 auto; padding: 36px 24px; }
+  h2 { font-size: 1.3rem; font-weight: 700; margin: 32px 0 12px; color: var(--accent); }
+  p { margin-bottom: 14px; color: var(--t2); }
+  ul { margin: 0 0 14px 22px; color: var(--t2); }
+  li { margin-bottom: 6px; }
+  .updated { font-size: 0.82rem; color: var(--t2); margin-bottom: 28px; }
+  strong { color: var(--t1); }
+</style>
+</head>
+<body>
+<header>
+  <a href="/">← Splitaway</a>
+  <h1>Политика конфиденциальности</h1>
+</header>
+<main>
+  <p class="updated">Последнее обновление: 13 июня 2026 г.</p>
+
+  <h2>1. Кто мы</h2>
+  <p>Splitaway — приложение для совместного учёта расходов в поездках. Разработано как личный проект (<a href="mailto:rafaelbabaew@googlemail.com" style="color:var(--accent)">rafaelbabaew@googlemail.com</a>). Приложение работает как прогрессивное веб-приложение (PWA) и доступно по адресу <strong>splitaway.netlify.app</strong>.</p>
+
+  <h2>2. Какие данные мы собираем</h2>
+  <p>Splitaway собирает только данные, которые вы вводите сами:</p>
+  <ul>
+    <li><strong>Данные поездки</strong> — название, направление, список участников (имена, без привязки к реальным личностям).</li>
+    <li><strong>Финансовые записи</strong> — суммы расходов, платёжные распределения. Мы не обрабатываем реальные платежи.</li>
+    <li><strong>Push-подписки</strong> — endpoint и ключи уведомлений для отправки оповещений (только с вашего явного согласия).</li>
+  </ul>
+  <p>Мы <strong>не собираем</strong>: имена пользователей, email, телефон, геолокацию, ID устройства, рекламные идентификаторы, cookies для трекинга.</p>
+
+  <h2>3. Как мы храним данные</h2>
+  <ul>
+    <li><strong>Локально</strong> — данные сохраняются в localStorage вашего браузера.</li>
+    <li><strong>В облаке</strong> — при синхронизации данные отправляются в Supabase (PostgreSQL). Доступ защищён токенами приглашения и Row Level Security.</li>
+    <li><strong>Хостинг</strong> — статика хостится на Netlify (США). Данные Supabase хранятся в регионе EU West.</li>
+  </ul>
+
+  <h2>4. Совместный доступ к поездке</h2>
+  <p>Поездка доступна только тем, у кого есть ссылка-приглашение с уникальным токеном. Данные не открыты публично. Организатор поездки может удалить все данные в любой момент через настройки.</p>
+
+  <h2>5. Сторонние сервисы</h2>
+  <ul>
+    <li><strong>Supabase</strong> — база данных и реалтайм (<a href="https://supabase.com/privacy" style="color:var(--accent)" target="_blank">политика</a>).</li>
+    <li><strong>Netlify</strong> — хостинг (<a href="https://www.netlify.com/privacy/" style="color:var(--accent)" target="_blank">политика</a>).</li>
+    <li><strong>Anthropic Claude</strong> — OCR чеков через API прокси на Netlify Functions (<a href="https://www.anthropic.com/privacy" style="color:var(--accent)" target="_blank">политика</a>). Изображения чеков не сохраняются.</li>
+  </ul>
+
+  <h2>6. Удаление данных</h2>
+  <p>Чтобы удалить все данные поездки: откройте приложение → Настройки → «Удалить поездку». Это необратимо удалит все записи из базы данных. Данные в localStorage очищаются через «Настройки браузера → Очистить данные сайта».</p>
+
+  <h2>7. Дети</h2>
+  <p>Приложение не предназначено для детей до 13 лет и не собирает данные о них намеренно.</p>
+
+  <h2>8. Изменения</h2>
+  <p>При существенных изменениях политики мы обновим дату в заголовке. Актуальная версия всегда доступна по адресу <strong>splitaway.netlify.app/privacy.html</strong>.</p>
+
+  <h2>9. Контакт</h2>
+  <p>Вопросы: <a href="mailto:rafaelbabaew@googlemail.com" style="color:var(--accent)">rafaelbabaew@googlemail.com</a></p>
+</main>
+</body>
+</html>

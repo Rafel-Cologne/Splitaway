@@ -1,0 +1,3524 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0a0a0f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="description" content="Умное деление расходов в совместных поездках">
+<title>Splitaway</title>
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<!-- lucide: defer — не блокирует парсинг, загружается параллельно -->
+<script defer src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+<!-- qrcodejs и tesseract.js: загружаются динамически по требованию (см. loadQRCode/loadTesseract) -->
+<script src="/js/sb-config.js"></script>
+<script src="/js/sb-client.js"></script>
+<style>
+:root{
+  --bg:#0a0a0f;--bg2:#111118;--bg3:#1c1c28;
+  --s1:rgba(255,255,255,0.04);--s2:rgba(255,255,255,0.08);
+  --b1:rgba(255,255,255,0.08);--b2:rgba(255,255,255,0.16);
+  --accent:#6c63ff;--ac2:#8b83ff;--aglow:rgba(108,99,255,0.22);
+  --green:#22d3a0;--gglow:rgba(34,211,160,0.18);
+  --red:#ff5f6e;--rglow:rgba(255,95,110,0.18);
+  --amber:#f59e0b;--amglow:rgba(245,158,11,0.18);
+  --text:#f0f0f8;--t2:rgba(240,240,248,0.52);--t3:rgba(240,240,248,0.28);
+  --r:18px;--rsm:12px;--rxs:8px;
+  --font:'Sora',sans-serif;--mono:'DM Mono',monospace;
+  --nh:72px;--sb:env(safe-area-inset-bottom,0px);
+}
+[data-theme=light]{
+  --bg:#f2f2fb;--bg2:#e6e6f5;--bg3:#d6d6ec;
+  --s1:rgba(0,0,0,0.06);--s2:rgba(0,0,0,0.11);
+  --b1:rgba(0,0,0,0.14);--b2:rgba(0,0,0,0.26);
+  --accent:#4c44e8;--ac2:#3d36d0;--aglow:rgba(76,68,232,0.16);
+  --green:#0a7a5e;--gglow:rgba(10,122,94,0.14);
+  --red:#c41e35;--rglow:rgba(196,30,53,0.14);
+  --amber:#8a5500;--amglow:rgba(138,85,0,0.14);
+  --text:#0d0d1a;--t2:rgba(13,13,26,0.72);--t3:rgba(13,13,26,0.52);
+}
+@media(prefers-color-scheme:light){
+  :root:not([data-theme=dark]){
+    --bg:#f2f2fb;--bg2:#e6e6f5;--bg3:#d6d6ec;
+    --s1:rgba(0,0,0,0.06);--s2:rgba(0,0,0,0.11);
+    --b1:rgba(0,0,0,0.14);--b2:rgba(0,0,0,0.26);
+    --accent:#4c44e8;--ac2:#3d36d0;--aglow:rgba(76,68,232,0.16);
+    --green:#0a7a5e;--gglow:rgba(10,122,94,0.14);
+    --red:#c41e35;--rglow:rgba(196,30,53,0.14);
+    --amber:#8a5500;--amglow:rgba(138,85,0,0.14);
+    --text:#0d0d1a;--t2:rgba(13,13,26,0.72);--t3:rgba(13,13,26,0.52);
+  }
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html{font-size:16px}
+body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100dvh;overflow-x:hidden;-webkit-font-smoothing:antialiased}
+::-webkit-scrollbar{width:3px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--b2);border-radius:3px}
+
+/* LAYOUT */
+.app{display:flex;flex-direction:column;min-height:100dvh}
+.page{display:none;flex-direction:column;min-height:100dvh;padding-bottom:calc(var(--nh) + var(--sb) + 12px)}
+.page.active{display:flex}
+
+/* TOPBAR */
+.topbar{position:sticky;top:0;z-index:50;padding:14px 20px 10px;background:linear-gradient(to bottom,var(--bg) 75%,transparent);display:flex;align-items:center;justify-content:space-between;gap:12px}
+.tb-title{font-size:1.05rem;font-weight:700}
+.tb-sub{font-size:0.72rem;color:var(--t2);margin-top:1px}
+
+/* NAV */
+.nav{position:fixed;bottom:0;left:0;right:0;z-index:100;height:calc(var(--nh) + var(--sb));padding-bottom:var(--sb);background:rgba(10,10,15,0.9);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-top:1px solid var(--b1);display:flex;align-items:center}
+[data-theme=light] .nav{background:rgba(238,238,250,0.94)}
+@media(prefers-color-scheme:light){:root:not([data-theme=dark]) .nav{background:rgba(238,238,250,0.94)}}
+/* btn-g невидима на светлом без явного фона */
+[data-theme=light] .btn-g,
+[data-theme=light] .btn-g:focus{background:rgba(0,0,0,0.05);border-color:rgba(0,0,0,0.22);color:rgba(13,13,26,0.80)}
+[data-theme=light] .btn-g:hover{background:rgba(0,0,0,0.09);border-color:rgba(0,0,0,0.32);color:rgba(13,13,26,1)}
+@media(prefers-color-scheme:light){
+  :root:not([data-theme=dark]) .btn-g{background:rgba(0,0,0,0.05);border-color:rgba(0,0,0,0.22);color:rgba(13,13,26,0.80)}
+  :root:not([data-theme=dark]) .btn-g:hover{background:rgba(0,0,0,0.09);border-color:rgba(0,0,0,0.32);color:rgba(13,13,26,1)}
+}
+/* hero — светлый фон получает чуть больше заметности */
+[data-theme=light] .hero{background:linear-gradient(135deg,rgba(76,68,232,0.10),rgba(10,122,94,0.07));border-color:rgba(76,68,232,0.20)}
+@media(prefers-color-scheme:light){:root:not([data-theme=dark]) .hero{background:linear-gradient(135deg,rgba(76,68,232,0.10),rgba(10,122,94,0.07));border-color:rgba(76,68,232,0.20)}}
+/* chip в светлой теме */
+[data-theme=light] .chip{border-color:rgba(0,0,0,0.22);color:rgba(13,13,26,0.72)}
+@media(prefers-color-scheme:light){:root:not([data-theme=dark]) .chip{border-color:rgba(0,0,0,0.22);color:rgba(13,13,26,0.72)}}
+/* member-sel */
+[data-theme=light] .member-sel{border-color:rgba(0,0,0,0.20);color:rgba(13,13,26,0.72)}
+@media(prefers-color-scheme:light){:root:not([data-theme=dark]) .member-sel{border-color:rgba(0,0,0,0.20);color:rgba(13,13,26,0.72)}}
+.nav-items{display:flex;width:100%;justify-content:space-around;padding:0 4px}
+.ni{display:flex;flex-direction:column;align-items:center;gap:3px;padding:7px 10px;border-radius:var(--rsm);cursor:pointer;border:none;background:none;color:var(--t2);font-family:var(--font);flex:1;transition:all 0.18s}
+.ni:hover{background:var(--s1);color:var(--text)}
+.ni.active{color:var(--ac2)}
+.ni svg{width:21px;height:21px}
+.ni span{font-size:0.62rem;font-weight:500}
+
+/* BUTTONS */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:12px 22px;border-radius:var(--rsm);border:none;font-family:var(--font);font-weight:600;font-size:0.88rem;cursor:pointer;transition:all 0.18s;white-space:nowrap}
+.btn-p{background:var(--accent);color:#fff;box-shadow:0 0 20px var(--aglow)}
+.btn-p:hover{background:var(--ac2);transform:translateY(-1px)}
+.btn-s{background:var(--s2);color:var(--text);border:1px solid var(--b2)}
+.btn-s:hover{background:var(--s1)}
+.btn-g{background:none;color:var(--t2);border:1px solid var(--b1)}
+.btn-g:hover{color:var(--text);border-color:var(--b2)}
+.btn-d{background:var(--red);color:#fff}
+.btn-am{background:var(--amber);color:#0a0a0f;font-weight:700}
+.btn-sm{padding:7px 13px;font-size:0.78rem;border-radius:var(--rxs)}
+.btn-ic{padding:9px;border-radius:var(--rxs)}
+.btn-fw{width:100%}
+.btn-green{background:var(--green);color:#0a0a0f}
+
+/* INPUTS */
+.iw{display:flex;flex-direction:column;gap:5px}
+.il{font-size:0.76rem;color:var(--t2);font-weight:500}
+.inp{background:var(--s1);border:1px solid var(--b1);border-radius:var(--rsm);padding:11px 14px;color:var(--text);font-family:var(--font);font-size:0.93rem;outline:none;transition:border-color 0.18s,box-shadow 0.18s;width:100%}
+.inp:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--aglow)}
+.inp::placeholder{color:var(--t3)}
+textarea.inp{resize:vertical;min-height:90px}
+select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='11' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 13px center;padding-right:36px}
+
+/* SECTION */
+.sec{padding:0 18px;display:flex;flex-direction:column;gap:10px}
+.sec-hd{display:flex;align-items:center;justify-content:space-between}
+.sec-ttl{font-size:0.76rem;color:var(--t2);font-weight:600;letter-spacing:0.07em;text-transform:uppercase}
+
+/* CARDS */
+.card{background:var(--s1);border:1px solid var(--b1);border-radius:var(--r);padding:18px;transition:border-color 0.18s}
+.card:hover{border-color:var(--b2)}
+
+/* AVATAR */
+.av{border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff;flex-shrink:0}
+.av-lg{width:44px;height:44px;font-size:1rem}
+.av-md{width:36px;height:36px;font-size:0.85rem}
+.av-sm{width:28px;height:28px;font-size:0.7rem}
+
+/* BADGE */
+.bdg{display:inline-flex;align-items:center;gap:3px;padding:3px 9px;border-radius:100px;font-size:0.7rem;font-weight:600}
+.bdg-g{background:var(--gglow);color:var(--green)}
+.bdg-r{background:var(--rglow);color:var(--red)}
+.bdg-p{background:var(--aglow);color:var(--ac2)}
+.bdg-am{background:var(--amglow);color:var(--amber)}
+
+/* CHIP */
+.chip{display:inline-flex;align-items:center;gap:5px;padding:5px 11px;border-radius:100px;border:1px solid var(--b2);cursor:pointer;font-size:0.8rem;font-weight:500;transition:all 0.15s;background:var(--s1);color:var(--t2)}
+.chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.chip:hover:not(.on){border-color:var(--accent);color:var(--text)}
+.chip.sel-check{border-color:var(--green);background:var(--gglow);color:var(--green)}
+
+/* MODAL */
+.ov{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,0.72);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);display:flex;align-items:flex-end;justify-content:center;opacity:0;pointer-events:none;transition:opacity 0.22s}
+.ov.open{opacity:1;pointer-events:all}
+.mdl{background:var(--bg2);border:1px solid var(--b2);border-radius:var(--r) var(--r) 0 0;width:100%;max-width:620px;max-height:93dvh;overflow-y:auto;padding:22px 18px calc(18px + var(--sb));transform:translateY(28px);transition:transform 0.28s cubic-bezier(0.34,1.4,0.64,1);display:flex;flex-direction:column;gap:18px}
+.ov.open .mdl{transform:translateY(0)}
+.mdl-handle{width:38px;height:4px;border-radius:4px;background:var(--b2);margin:-10px auto 2px}
+.mdl-title{font-size:1.15rem;font-weight:700}
+
+/* TOAST */
+.tw{position:fixed;top:18px;left:50%;transform:translateX(-50%);z-index:300;display:flex;flex-direction:column;gap:7px;align-items:center;pointer-events:none}
+.toast{background:var(--bg3);border:1px solid var(--b2);border-radius:var(--rsm);padding:11px 18px;font-size:0.86rem;font-weight:500;box-shadow:0 8px 28px rgba(0,0,0,0.35);animation:sd 0.28s ease,fo 0.28s 2.7s forwards;white-space:nowrap}
+@keyframes sd{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+@keyframes fo{to{opacity:0;transform:translateY(-5px)}}
+
+/* HERO */
+.hero{background:linear-gradient(135deg,rgba(108,99,255,0.14),rgba(34,211,160,0.07));border:1px solid rgba(108,99,255,0.18);border-radius:var(--r);padding:26px 22px;text-align:center;position:relative;overflow:hidden}
+.hero::before{content:'';position:absolute;inset:0;background:radial-gradient(circle at 30% 20%,rgba(108,99,255,0.09) 0%,transparent 55%),radial-gradient(circle at 70% 80%,rgba(34,211,160,0.06) 0%,transparent 55%);pointer-events:none}
+.hero-amt{font-size:2.8rem;font-weight:700;letter-spacing:-0.04em;font-family:var(--mono)}
+
+/* DEBT ROW */
+.dr{display:flex;align-items:center;gap:11px;padding:13px 15px;background:var(--s1);border:1px solid var(--b1);border-radius:var(--rsm)}
+.da{font-family:var(--mono);font-weight:600;margin-left:auto;flex-shrink:0}
+.da.pos{color:var(--green)}.da.neg{color:var(--red)}
+
+/* EXPENSE ROW */
+.er{display:flex;align-items:center;gap:11px;padding:13px 15px;background:var(--s1);border:1px solid var(--b1);border-radius:var(--rsm);cursor:pointer;transition:border-color 0.15s}
+.er:hover{border-color:var(--b2)}
+.ei{flex:1;min-width:0}
+.en{font-weight:500;font-size:0.88rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.em{font-size:0.73rem;color:var(--t2);margin-top:2px;display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+
+/* STAT */
+.sbox{background:var(--s1);border:1px solid var(--b1);border-radius:var(--rsm);padding:14px}
+.sv{font-size:1.35rem;font-weight:700;font-family:var(--mono)}
+.sl{font-size:0.71rem;color:var(--t2);margin-top:2px}
+
+/* TABS */
+.tabs{display:flex;gap:4px;background:var(--s1);border-radius:var(--rsm);padding:4px}
+.tab{flex:1;padding:8px;border-radius:var(--rxs);text-align:center;font-size:0.8rem;font-weight:500;cursor:pointer;transition:all 0.18s;color:var(--t2);border:none;background:none;font-family:var(--font)}
+.tab.active{background:var(--accent);color:#fff}
+
+/* GROUPS VISUAL */
+.grp-couple{border:1px solid rgba(255,95,110,0.28);border-radius:var(--r);overflow:hidden;background:linear-gradient(135deg,rgba(255,95,110,0.04),rgba(108,99,255,0.03))}
+.grp-family{border:1px solid rgba(245,158,11,0.28);border-radius:var(--r);overflow:hidden;background:linear-gradient(135deg,rgba(245,158,11,0.04),rgba(34,211,160,0.03))}
+.grp-hd{padding:7px 13px;display:flex;align-items:center;gap:7px}
+.grp-couple .grp-hd{background:rgba(255,95,110,0.09);border-bottom:1px solid rgba(255,95,110,0.14)}
+.grp-family .grp-hd{background:rgba(245,158,11,0.09);border-bottom:1px solid rgba(245,158,11,0.14)}
+.grp-row{display:flex;align-items:center;gap:11px;padding:11px 13px}
+.grp-couple .grp-row+.grp-row{border-top:1px solid rgba(255,95,110,0.1)}
+.grp-family .grp-row+.grp-row{border-top:1px solid rgba(245,158,11,0.1)}
+
+/* MEMBER SELECTOR (checkbox-style chips) */
+.member-sel-wrap{display:flex;gap:8px;flex-wrap:wrap}
+.member-sel{display:flex;align-items:center;gap:7px;padding:7px 13px;border-radius:100px;border:2px solid var(--b1);cursor:pointer;transition:all 0.15s;font-size:0.82rem;font-weight:500;background:var(--s1);color:var(--t2);user-select:none}
+.member-sel.checked{background:var(--s2);color:var(--text)}
+.member-sel .chk{width:16px;height:16px;border-radius:50%;border:2px solid var(--b2);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:0.65rem;transition:all 0.15s}
+.member-sel.checked .chk{background:var(--accent);border-color:var(--accent);color:#fff}
+
+/* PROGRESS */
+.pb{height:4px;background:var(--s2);border-radius:4px;overflow:hidden}
+.pf{height:100%;border-radius:4px;background:var(--accent);transition:width 0.5s}
+
+/* PULSE */
+.pulse{width:7px;height:7px;border-radius:50%;background:var(--green);animation:pls 2s infinite}
+@keyframes pls{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.5;transform:scale(0.75)}}
+
+/* FAB */
+.fab{position:fixed;bottom:calc(var(--nh) + var(--sb) + 14px);right:18px;z-index:90;width:52px;height:52px;border-radius:15px;background:var(--accent);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 18px var(--aglow),0 0 36px var(--aglow);transition:all 0.18s;color:#fff}
+.fab:hover{transform:translateY(-2px) scale(1.05)}
+.fab:active{transform:scale(0.95)}
+
+/* ONBOARDING */
+.ob{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100dvh;padding:28px 22px;text-align:center;gap:36px}
+.logo{width:76px;height:76px;border-radius:21px;background:linear-gradient(135deg,var(--accent),var(--green));display:flex;align-items:center;justify-content:center;font-size:1.9rem;box-shadow:0 0 36px var(--aglow)}
+.logo-txt{font-size:2.1rem;font-weight:700;letter-spacing:-0.04em}
+.logo-txt span{color:var(--ac2)}
+
+/* UPLOAD */
+.upl{border:2px dashed var(--b2);border-radius:var(--r);padding:30px 20px;text-align:center;cursor:pointer;transition:all 0.18s;display:flex;flex-direction:column;align-items:center;gap:10px}
+.upl:hover,.upl.drag{border-color:var(--accent);background:var(--aglow)}
+
+/* ITEM PICK (menu) */
+.mpick{display:flex;align-items:center;gap:10px;padding:11px 13px;background:var(--s1);border:1px solid var(--b1);border-radius:var(--rsm);cursor:pointer;transition:all 0.15s}
+.mpick:hover{border-color:var(--accent)}
+.mpick.ok{border-color:var(--green);background:rgba(34,211,160,0.06)}
+.mchk{width:20px;height:20px;border-radius:50%;border:2px solid var(--b2);display:flex;align-items:center;justify-content:center;font-size:0.7rem;flex-shrink:0;transition:all 0.15s}
+.mpick.ok .mchk{background:var(--green);border-color:var(--green);color:#fff}
+
+/* RECEIPT ITEM ROW */
+.ritem{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--b1)}
+.ritem:last-child{border-bottom:none}
+.rip{background:var(--s2);border:1px solid var(--b1);border-radius:var(--rxs);padding:5px 9px;font-family:var(--mono);font-size:0.83rem;width:78px;color:var(--text);outline:none;text-align:right}
+.rip:focus{border-color:var(--accent)}
+
+/* DIVIDER */
+.div{height:1px;background:var(--b1);margin:6px 0}
+
+/* ANIM */
+.fade-in{animation:fi 0.32s ease}
+@keyframes fi{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:translateY(0)}}
+.stagger>*{animation:fi 0.28s ease both}
+.stagger>*:nth-child(1){animation-delay:0.04s}
+.stagger>*:nth-child(2){animation-delay:0.08s}
+.stagger>*:nth-child(3){animation-delay:0.12s}
+.stagger>*:nth-child(4){animation-delay:0.16s}
+.stagger>*:nth-child(5){animation-delay:0.20s}
+.stagger>*:nth-child(6){animation-delay:0.24s}
+
+/* GRID */
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+
+/* SCROLL SECTION */
+.scr{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:22px;padding-bottom:6px}
+
+/* SPIN */
+.spin{width:17px;height:17px;border:2px solid var(--b2);border-top-color:var(--accent);border-radius:50%;animation:sp 0.7s linear infinite;flex-shrink:0}
+@keyframes sp{to{transform:rotate(360deg)}}
+.ld{display:flex;align-items:center;justify-content:center;gap:8px;color:var(--t2);font-size:0.83rem;padding:18px}
+
+/* EMPTY */
+.emp{display:flex;flex-direction:column;align-items:center;gap:10px;padding:40px 20px;text-align:center}
+.emp-ic{font-size:2.8rem;opacity:0.28}
+.emp-t{font-size:0.95rem;font-weight:600;color:var(--t2)}
+.emp-s{font-size:0.8rem;color:var(--t3);max-width:200px}
+
+/* WHO PAYS */
+.wp{display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:var(--rxs);border:1px solid var(--b1);background:var(--s1);cursor:pointer;transition:all 0.15s;font-size:0.8rem;color:var(--text);font-family:var(--font)}
+.wp.on{border-color:var(--green);background:var(--gglow);color:var(--green)}
+
+/* TREASURY HERO */
+.th{background:linear-gradient(135deg,rgba(245,158,11,0.11),rgba(108,99,255,0.07));border:1px solid rgba(245,158,11,0.18);border-radius:var(--r);padding:22px}
+</style>
+</head>
+<body>
+<div class="tw" id="tw"></div>
+
+<!-- ===== ONBOARDING ===== -->
+<div id="pg-ob" class="ob fade-in">
+  <div style="display:flex;flex-direction:column;align-items:center;gap:14px">
+    <div class="logo">✈️</div>
+    <div><div class="logo-txt">Split<span>away</span></div><div style="color:var(--t2);font-size:0.88rem;margin-top:3px">Умное деление расходов</div></div>
+  </div>
+  <div style="display:flex;flex-direction:column;gap:18px;width:100%;max-width:420px">
+    <!-- Step 1 -->
+    <div id="ob-s1">
+      <div style="margin-bottom:18px"><div style="font-size:1.15rem;font-weight:700;margin-bottom:5px">Добро пожаловать</div><div style="font-size:0.83rem;color:var(--t2)">Введите код поездки или создайте новую</div></div>
+      <div style="display:flex;flex-direction:column;gap:11px">
+        <div class="iw"><label class="il">Код поездки</label><input class="inp" id="ob-code" style="text-transform:uppercase;letter-spacing:0.1em;font-family:var(--mono)" oninput="this.value=this.value.toUpperCase()"></div>
+        <button class="btn btn-s btn-fw" onclick="joinTrip()">Войти в поездку</button>
+        <div style="display:flex;align-items:center;gap:10px"><div class="div" style="flex:1"></div><span style="color:var(--t3);font-size:0.78rem">или</span><div class="div" style="flex:1"></div></div>
+        <button class="btn btn-p btn-fw" onclick="showOb('ob-create')"><i data-lucide="plus-circle" style="width:15px;height:15px"></i> Создать поездку</button>
+      </div>
+    </div>
+    <!-- Create Trip -->
+    <div id="ob-create" style="display:none;flex-direction:column;gap:13px">
+      <div style="display:flex;align-items:center;gap:9px"><button class="btn btn-g btn-sm btn-ic" onclick="showOb('ob-s1')"><i data-lucide="arrow-left" style="width:15px;height:15px"></i></button><div style="font-size:1.05rem;font-weight:700">Новая поездка</div></div>
+      <div class="iw"><label class="il">Название поездки</label><input class="inp" id="ct-name"></div>
+      <div class="iw"><label class="il">Направление</label><input class="inp" id="ct-dest" placeholder="Город, страна"></div>
+      <div class="iw"><label class="il">Общая касса, €</label><input class="inp" id="ct-cash" type="number" placeholder="0" min="0"></div>
+      <div class="iw">
+        <label class="il">Ваше имя (вы — Админ)</label>
+        <div style="display:flex;gap:8px">
+          <input class="inp" id="ct-admin" style="flex:1">
+          <select class="inp" id="ct-admin-g" style="width:72px;flex-shrink:0"><option value="m">М</option><option value="f">Ж</option></select>
+        </div>
+      </div>
+      <div class="iw">
+        <label class="il">Участники</label>
+        <div id="ct-members" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px;min-height:28px"></div>
+        <div style="display:flex;gap:7px">
+          <input class="inp" id="ct-m-name" placeholder="Имя" onkeydown="if(event.key==='Enter'){event.preventDefault();ctAddMember()}" style="flex:1">
+          <select class="inp" id="ct-m-g" style="width:72px;flex-shrink:0"><option value="m">М</option><option value="f">Ж</option></select>
+          <button class="btn btn-s btn-sm" onclick="ctAddMember()">+</button>
+        </div>
+      </div>
+      <button class="btn btn-p btn-fw" onclick="createTrip()"><i data-lucide="check" style="width:15px;height:15px"></i> Создать поездку</button>
+    </div>
+    <!-- Name picker -->
+    <div id="ob-pick" style="display:none;flex-direction:column;gap:14px">
+      <div style="font-size:1.05rem;font-weight:700">Выберите ваше имя</div>
+      <div style="font-size:0.83rem;color:var(--t2)">Поездка: <span id="ob-pick-trip" style="color:var(--text);font-weight:600"></span></div>
+      <div id="ob-pick-list" style="display:flex;flex-direction:column;gap:7px"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MAIN APP ===== -->
+<div class="app" id="pg-app" style="display:none">
+
+  <!-- DASHBOARD -->
+  <div class="page active" id="pg-dash">
+    <div class="topbar">
+      <div><div class="tb-title" id="app-trip-name"></div><div class="tb-sub" id="app-trip-sub"></div></div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <div class="pulse" id="rt-indicator" title="Онлайн"></div>
+        <button class="btn btn-g btn-sm btn-ic" id="push-btn" onclick="togglePush()" title="Уведомления"><i data-lucide="bell" style="width:15px;height:15px"></i></button>
+        <button class="btn btn-s btn-sm" onclick="openQR()" style="gap:5px"><i data-lucide="qr-code" style="width:13px;height:13px"></i> QR</button>
+        <button class="btn btn-g btn-sm btn-ic" onclick="toggleTheme()"><i data-lucide="sun-moon" style="width:15px;height:15px"></i></button>
+      </div>
+    </div>
+    <div class="scr stagger" style="gap:20px;padding:0 0 14px">
+      <div style="padding:0 18px">
+        <div class="hero">
+          <div style="font-size:0.78rem;color:var(--t2);margin-bottom:7px">Общие расходы</div>
+          <div class="hero-amt" id="d-total">0,00</div>
+          <div style="font-size:0.8rem;color:var(--t2);margin-top:5px">EUR</div>
+        </div>
+      </div>
+      <div style="padding:0 18px"><div class="g2"><div class="sbox"><div class="sv" id="d-cnt">0</div><div class="sl">расходов</div></div><div class="sbox"><div class="sv" id="d-mbr">0</div><div class="sl">участников</div></div></div></div>
+      <div class="sec">
+        <div class="sec-hd" style="cursor:pointer" onclick="toggleMyBal()">
+          <span class="sec-ttl">Мой баланс</span>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span id="d-mybal-summary" style="font-family:var(--mono);font-size:0.88rem;font-weight:700"></span>
+            <i data-lucide="chevron-down" id="chev-mybal" style="width:14px;height:14px;color:var(--t2);transition:transform 0.2s"></i>
+          </div>
+        </div>
+        <div id="d-mybal"></div>
+      </div>
+      <div class="sec">
+        <div class="sec-hd"><span class="sec-ttl">Последние расходы</span><button class="btn btn-g btn-sm" onclick="goPage('pg-exp')">Все</button></div>
+        <div id="d-recent"></div>
+      </div>
+      <div class="sec">
+        <div class="sec-hd"><span class="sec-ttl">Участники</span></div>
+        <div id="d-members" style="display:flex;flex-direction:column;gap:10px"></div>
+      </div>
+    </div>
+    <button class="fab" onclick="openAddExp()"><i data-lucide="plus" style="width:21px;height:21px"></i></button>
+  </div>
+
+  <!-- EXPENSES -->
+  <div class="page" id="pg-exp">
+    <div class="topbar">
+      <div class="tb-title">Расходы</div>
+      <div style="display:flex;gap:7px">
+        <button class="btn btn-s btn-sm" onclick="openMyOrder()"><i data-lucide="pencil-line" style="width:13px;height:13px"></i> Мой заказ</button>
+        <button class="btn btn-p btn-sm" onclick="openAddExp()"><i data-lucide="plus" style="width:13px;height:13px"></i> Добавить</button>
+      </div>
+    </div>
+    <div class="scr" style="gap:14px"><div class="sec"><div id="exp-list" style="display:flex;flex-direction:column;gap:8px"></div></div></div>
+  </div>
+
+  <!-- BALANCES -->
+  <div class="page" id="pg-bal">
+    <div class="topbar"><div class="tb-title">Балансы</div><span class="bdg bdg-g" style="font-size:0.68rem">Live</span></div>
+    <div class="scr" style="gap:18px">
+      <div style="padding:0 18px"><div class="tabs"><button class="tab active" onclick="balTab('debts',this)">Долги</button><button class="tab" onclick="balTab('persons',this)">Персоны</button><button class="tab" onclick="balTab('final',this)">Итог</button></div></div>
+      <div class="sec"><div id="bal-content" style="display:flex;flex-direction:column;gap:8px"></div></div>
+    </div>
+  </div>
+
+  <!-- TREASURY -->
+  <div class="page" id="pg-cash">
+    <div class="topbar"><div class="tb-title">Касса</div><div style="display:flex;gap:7px"><button id="cash-edit-btn" class="btn btn-g btn-sm btn-ic" onclick="openEditCashList()" style="display:none"><i data-lucide="pencil" style="width:13px;height:13px"></i></button><button class="btn btn-s btn-sm" onclick="openAddCash()"><i data-lucide="plus" style="width:13px;height:13px"></i> Пополнить</button></div></div>
+    <div class="scr" style="gap:18px">
+      <div style="padding:0 18px">
+        <div class="th">
+          <div style="font-size:0.75rem;color:var(--amber);font-weight:700;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:7px">💰 Общая касса</div>
+          <div style="display:flex;align-items:baseline;gap:7px">
+            <div style="font-size:2.2rem;font-weight:700;font-family:var(--mono)" id="cash-bal">0,00</div>
+            <div style="color:var(--t2)">€</div>
+          </div>
+          <div style="color:var(--t2);font-size:0.8rem;margin-top:3px">Остаток</div>
+          <div class="pb" style="margin-top:14px"><div class="pf" id="cash-prog" style="background:var(--amber)"></div></div>
+          <div style="display:flex;justify-content:space-between;margin-top:5px;font-size:0.72rem;color:var(--t3)">
+            <span>Потрачено: <span id="cash-spent">0</span> €</span>
+            <span>Всего: <span id="cash-total">0</span> €</span>
+          </div>
+        </div>
+      </div>
+      <!-- Per-person treasury breakdown -->
+      <div class="sec" id="cash-breakdown-sec" style="display:none">
+        <div class="sec-hd"><span class="sec-ttl">По участникам</span></div>
+        <div id="cash-breakdown" style="display:flex;flex-direction:column;gap:8px"></div>
+      </div>
+      <!-- Holder -->
+      <div class="sec" id="cash-holder-sec" style="display:none">
+        <div class="sec-hd">
+          <span class="sec-ttl">Касса у</span>
+          <button class="btn btn-g btn-sm" onclick="openHolderPicker()" id="cash-holder-btn" style="font-size:0.78rem"></button>
+        </div>
+      </div>
+      <!-- Contribution history -->
+      <div class="sec" id="cash-contrib-sec" style="display:none">
+        <div class="sec-hd">
+          <span class="sec-ttl">Взносы</span>
+          <button class="btn btn-g btn-sm btn-ic" onclick="toggleContribList()" title="Развернуть/свернуть"><i data-lucide="chevron-down" id="chev-contrib" style="width:13px;height:13px;transition:transform 0.2s"></i></button>
+        </div>
+        <div id="cash-contrib-summary" style="display:flex;flex-direction:column;gap:6px"></div>
+        <div id="cash-contrib-detail" style="display:none;flex-direction:column;gap:5px;padding-top:4px;border-top:1px solid var(--b1);margin-top:2px"></div>
+      </div>
+      <div class="sec">
+        <div class="sec-hd"><span class="sec-ttl">Списания из кассы</span></div>
+        <div id="cash-exp" style="display:flex;flex-direction:column;gap:8px"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCAN -->
+  <div class="page" id="pg-scan">
+    <div class="topbar"><div class="tb-title">Сканер</div></div>
+    <div class="scr" style="gap:18px">
+      <div style="padding:0 18px"><div class="tabs"><button class="tab active" onclick="scanTab('receipt',this)">🧾 Чек</button><button class="tab" onclick="scanTab('menu',this)">📖 Меню</button></div></div>
+      <!-- Receipt -->
+      <div class="sec" id="sc-receipt">
+        <!-- Две кнопки: камера и галерея -->
+        <div style="display:flex;gap:10px">
+          <button class="btn btn-p" style="flex:1;gap:8px;padding:14px 10px;flex-direction:column;height:auto"
+            onclick="document.getElementById('sc-file-r-cam').click()">
+            <i data-lucide="camera" style="width:26px;height:26px"></i>
+            <span style="font-size:0.8rem">Снять фото</span>
+          </button>
+          <button class="btn btn-g" style="flex:1;gap:8px;padding:14px 10px;flex-direction:column;height:auto"
+            onclick="document.getElementById('sc-file-r').click()"
+            ondragover="event.preventDefault();this.style.borderColor='var(--accent)'"
+            ondragleave="this.style.borderColor=''"
+            ondrop="handleDrop(event,'r');this.style.borderColor=''">
+            <i data-lucide="image" style="width:26px;height:26px"></i>
+            <span style="font-size:0.8rem">Из галереи</span>
+          </button>
+        </div>
+        <!-- Камера (capture=environment — задняя камера) -->
+        <input type="file" id="sc-file-r-cam" accept="image/*" capture="environment" style="display:none" onchange="handleFile(event,'r')">
+        <!-- Галерея -->
+        <input type="file" id="sc-file-r" accept="image/*" style="display:none" onchange="handleFile(event,'r')">
+        <div id="sc-prev-r" style="display:none">
+          <img id="sc-img-r" style="width:100%;border-radius:var(--rsm);max-height:240px;object-fit:contain;background:var(--s1)">
+          <div style="display:flex;gap:8px;margin-top:8px">
+            <button class="btn btn-g btn-sm" style="flex:1" onclick="document.getElementById('sc-file-r-cam').click()">
+              <i data-lucide="camera" style="width:14px;height:14px"></i> Переснять
+            </button>
+            <button class="btn btn-g btn-sm" style="flex:1" onclick="document.getElementById('sc-file-r').click()">
+              <i data-lucide="image" style="width:14px;height:14px"></i> Другое фото
+            </button>
+          </div>
+        </div>
+        <div id="sc-ld-r" class="ld" style="display:none"><div class="spin"></div><span id="sc-ld-r-txt">Распознаём чек...</span></div>
+      </div>
+      <!-- Menu -->
+      <div class="sec" id="sc-menu" style="display:none">
+        <div style="background:rgba(108,99,255,0.07);border:1px solid rgba(108,99,255,0.18);border-radius:var(--rsm);padding:12px;font-size:0.82rem;color:var(--ac2)">📸 Сфотографируйте меню — приложение распознает блюда. Каждый участник выбирает свой заказ, итог сравнивается с реальным чеком.</div>
+        <div class="upl" onclick="document.getElementById('sc-file-m').click()"><i data-lucide="book-open" style="width:38px;height:38px;color:var(--ac2)"></i><div style="font-weight:600">Сфотографировать меню</div><div style="font-size:0.8rem;color:var(--t2)">Загрузите фото страницы</div></div>
+        <input type="file" id="sc-file-m" accept="image/*" style="display:none" onchange="handleFile(event,'m')">
+        <div id="sc-prev-m" style="display:none"><img id="sc-img-m" style="width:100%;border-radius:var(--rsm);max-height:240px;object-fit:contain;background:var(--s1)"></div>
+        <div id="sc-ld-m" class="ld" style="display:none"><div class="spin"></div><span id="sc-ld-m-txt">Распознаём меню...</span></div>
+      </div>
+      <!-- Parsed items + inline assignment -->
+      <div class="sec" id="sc-parsed" style="display:none">
+        <div class="sec-hd">
+          <span class="sec-ttl" id="sc-parsed-title">Позиции чека</span>
+          <button class="btn btn-g btn-sm" onclick="addRItem()">+ Добавить</button>
+        </div>
+        <!-- Hint for non-admin -->
+        <div id="sc-assign-hint" style="font-size:0.78rem;color:var(--ac2);background:rgba(108,99,255,0.08);border:1px solid rgba(108,99,255,0.18);border-radius:var(--rxs);padding:7px 11px;margin-bottom:2px;display:none">
+          👆 Нажмите на своё имя напротив каждой позиции
+        </div>
+        <div id="sc-items-list" style="display:flex;flex-direction:column;gap:1px"></div>
+        <!-- Person summary -->
+        <div id="sc-person-summary" style="display:none"></div>
+        <!-- Total -->
+        <div style="font-size:0.8rem;color:var(--t2);text-align:right;padding:4px 0">
+          Итого: <span id="sc-total" style="font-family:var(--mono);font-weight:600;color:var(--text)">0,00 €</span>
+        </div>
+        <!-- Who paid + save -->
+        <div class="iw"><label class="il">Кто оплачивал счёт?</label><div id="sc-assign-payer" style="display:flex;gap:7px;flex-wrap:wrap"></div></div>
+        <div class="g2">
+          <div class="iw"><label class="il">Название расхода</label><input class="inp" id="sc-exp-name" placeholder="Ужин, Барбекю..."></div>
+          <div class="iw"><label class="il">Дата</label><input class="inp" id="sc-exp-date" type="date"></div>
+        </div>
+        <button class="btn btn-p btn-fw" onclick="saveReceiptExp()"><i data-lucide="check" style="width:15px;height:15px"></i> Сохранить расход</button>
+      </div>
+      <!-- Menu picker (unchanged) -->
+      <div class="sec" id="sc-menu-pick" style="display:none">
+        <div style="font-size:0.95rem;font-weight:700;margin-bottom:3px">Выбор заказов</div>
+        <div style="font-size:0.8rem;color:var(--t2);margin-bottom:10px">Выберите участника и нажмите на его блюда</div>
+        <div id="sc-pick-persons" style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:12px"></div>
+        <div id="sc-pick-items" style="display:flex;flex-direction:column;gap:6px"></div>
+        <div style="margin-top:12px;padding:12px 15px;background:var(--s1);border-radius:var(--rsm);border:1px solid var(--b1)">
+          <div style="font-size:0.73rem;color:var(--t2);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:7px">Предварительный счёт</div>
+          <div id="sc-pick-totals" style="display:flex;flex-direction:column;gap:4px"></div>
+          <div class="div"></div>
+          <div style="display:flex;justify-content:space-between;font-weight:700"><span>Итого</span><span id="sc-pick-grand" style="font-family:var(--mono)">0,00 €</span></div>
+        </div>
+        <div class="iw" style="margin-top:4px"><label class="il">Кто оплачивал счёт?</label><div id="sc-pick-payer" style="display:flex;gap:7px;flex-wrap:wrap"></div></div>
+        <button class="btn btn-p btn-fw" onclick="saveMenuExp()"><i data-lucide="check" style="width:15px;height:15px"></i> Сохранить расход</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SETTINGS -->
+  <div class="page" id="pg-set">
+    <div class="topbar"><div class="tb-title">Настройки</div></div>
+    <div class="scr" style="gap:18px">
+      <!-- Trip info -->
+      <div class="sec">
+        <div class="sec-hd"><span class="sec-ttl">Поездка</span></div>
+        <div class="card" style="display:flex;flex-direction:column;gap:13px" id="set-trip-form">
+          <div class="iw"><label class="il">Название</label><input class="inp" id="set-name"></div>
+          <div class="iw"><label class="il">Направление</label><input class="inp" id="set-dest"></div>
+          <button class="btn btn-p btn-fw btn-sm" onclick="saveTripSettings()"><i data-lucide="save" style="width:13px;height:13px"></i> Сохранить</button>
+        </div>
+      </div>
+      <!-- Members -->
+      <div class="sec">
+        <div class="sec-hd"><span class="sec-ttl">Участники</span><button class="btn btn-g btn-sm" onclick="openAddMember()" id="set-add-mbr-btn">+ Добавить</button></div>
+        <div id="set-members" style="display:flex;flex-direction:column;gap:7px"></div>
+      </div>
+      <!-- Groups -->
+      <div class="sec">
+        <div class="sec-hd"><span class="sec-ttl">Пары и Семьи</span></div>
+        <div style="background:rgba(108,99,255,0.07);border:1px solid rgba(108,99,255,0.18);border-radius:var(--rsm);padding:12px;font-size:0.82rem;color:var(--ac2);margin-bottom:4px">
+          Выберите участников ниже и нажмите «Объединить». 2 человека = Пара, 3+ = Семья
+        </div>
+        <div id="set-member-sel" class="member-sel-wrap"></div>
+        <div style="display:flex;gap:8px;margin-top:4px" id="set-grp-btns" style="display:none">
+          <button class="btn btn-s btn-sm" onclick="createGroup()"><i data-lucide="users" style="width:13px;height:13px"></i> Объединить выбранных</button>
+        </div>
+        <div id="set-groups" style="display:flex;flex-direction:column;gap:8px;margin-top:6px"></div>
+      </div>
+      <!-- Receipt Archive (admin only) -->
+      <div class="sec" id="set-archive-sec" style="display:none">
+        <div class="sec-hd">
+          <span class="sec-ttl">Архив чеков</span>
+          <span class="bdg bdg-p" id="set-archive-cnt"></span>
+        </div>
+        <div id="set-archive" style="display:flex;flex-direction:column;gap:7px"></div>
+      </div>
+      <!-- Theme -->
+      <div class="sec">
+        <div class="sec-hd"><span class="sec-ttl">Внешний вид</span></div>
+        <button id="set-theme-btn" class="btn btn-s btn-fw" onclick="toggleTheme()"><i data-lucide="sun" style="width:16px;height:16px"></i> Светлая тема</button>
+      </div>
+      <!-- Danger zone -->
+      <div class="sec">
+        <div class="sec-hd"><span class="sec-ttl">Поездка</span></div>
+        <button id="set-delete-btn" class="btn btn-d btn-fw" onclick="deleteTrip()" style="display:none"><i data-lucide="trash-2" style="width:14px;height:14px"></i> Удалить поездку</button>
+        <button id="set-leave-btn" class="btn btn-g btn-fw" onclick="leaveTrip()" style="display:none"><i data-lucide="log-out" style="width:14px;height:14px"></i> Выйти из поездки</button>
+        <button class="btn btn-g btn-fw" onclick="newTrip()"><i data-lucide="plus" style="width:14px;height:14px"></i> Создать новую поездку</button>
+      </div>
+      <!-- Правовые ссылки -->
+      <div class="sec" style="border-top:1px solid var(--b1);padding-top:14px;margin-top:4px">
+        <div style="display:flex;gap:16px;flex-wrap:wrap;justify-content:center;padding:4px 0">
+          <a href="/support.html" target="_blank" style="color:var(--t3);font-size:0.78rem;text-decoration:none">Поддержка</a>
+          <a href="/privacy.html" target="_blank" style="color:var(--t3);font-size:0.78rem;text-decoration:none">Конфиденциальность</a>
+          <a href="/terms.html"   target="_blank" style="color:var(--t3);font-size:0.78rem;text-decoration:none">Условия</a>
+        </div>
+        <p style="text-align:center;color:var(--t3);font-size:0.72rem;margin-top:6px">Splitaway v1.9 · 2026</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- NAV -->
+  <nav class="nav">
+    <div class="nav-items">
+      <button class="ni active" onclick="goPage('pg-dash',this)"><i data-lucide="home"></i><span>Главная</span></button>
+      <button class="ni" onclick="goPage('pg-exp',this)"><i data-lucide="receipt"></i><span>Расходы</span></button>
+      <button class="ni" onclick="goPage('pg-scan',this)"><i data-lucide="scan"></i><span>Сканер</span></button>
+      <button class="ni" onclick="goPage('pg-bal',this)"><i data-lucide="bar-chart-2"></i><span>Балансы</span></button>
+      <button class="ni" onclick="goPage('pg-cash',this)"><i data-lucide="wallet"></i><span>Касса</span></button>
+      <button class="ni" onclick="goPage('pg-set',this)"><i data-lucide="settings"></i><span>Настройки</span></button>
+    </div>
+  </nav>
+</div>
+
+<!-- ===== MODALS ===== -->
+
+<!-- ADD EXPENSE -->
+<div class="ov" id="m-add-exp"><div class="mdl">
+  <div class="mdl-handle"></div>
+  <div style="display:flex;align-items:center;justify-content:space-between">
+    <div class="mdl-title">Добавить расход</div>
+    <button class="btn btn-g btn-sm btn-ic" onclick="closeModal('m-add-exp')"><i data-lucide="x" style="width:15px;height:15px"></i></button>
+  </div>
+  <div class="iw"><label class="il">Название</label><input class="inp" id="ae-name" placeholder="Ужин, Такси, Отель..."></div>
+  <div class="g2">
+    <div class="iw"><label class="il">Сумма, €</label><input class="inp" id="ae-amt" type="number" placeholder="0,00" step="0.01" min="0" style="font-family:var(--mono)"></div>
+    <div class="iw"><label class="il">Дата</label><input class="inp" id="ae-date" type="date"></div>
+  </div>
+  <div class="iw"><label class="il">Комментарий</label><input class="inp" id="ae-comment" placeholder="Необязательно"></div>
+  <div class="iw">
+    <label class="il">Кто платил?</label>
+    <div id="ae-payer" style="display:flex;gap:7px;flex-wrap:wrap"></div>
+  </div>
+  <div id="ae-part-wrap" class="iw">
+    <label class="il">Разделить между</label>
+    <div style="display:flex;gap:7px;margin-bottom:7px"><button class="btn btn-s btn-sm" onclick="aeSelectAll()">Все</button><button class="btn btn-g btn-sm" onclick="aeSelectNone()">Очистить</button></div>
+    <div id="ae-participants" style="display:flex;flex-direction:column;gap:4px"></div>
+  </div>
+  <button class="btn btn-p btn-fw" onclick="saveExp()"><i data-lucide="check" style="width:15px;height:15px"></i> Сохранить</button>
+</div></div>
+
+<!-- EXPENSE DETAIL -->
+<div class="ov" id="m-exp-detail"><div class="mdl">
+  <div class="mdl-handle"></div>
+  <div id="m-exp-detail-content"></div>
+</div></div>
+
+<!-- ASSIGN ITEM -->
+<div class="ov" id="m-assign"><div class="mdl">
+  <div class="mdl-handle"></div>
+  <div class="mdl-title" style="margin-bottom:14px">Назначить позицию</div>
+  <div id="m-assign-list" style="display:flex;flex-direction:column;gap:7px"></div>
+</div></div>
+
+<!-- QR -->
+<div class="ov" id="m-qr"><div class="mdl" style="align-items:center;text-align:center">
+  <div class="mdl-handle"></div>
+  <div style="width:100%;display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
+    <div class="mdl-title">Пригласить</div>
+    <button class="btn btn-g btn-sm btn-ic" onclick="closeModal('m-qr')"><i data-lucide="x" style="width:15px;height:15px"></i></button>
+  </div>
+  <div style="font-size:0.8rem;color:var(--t2);margin-bottom:16px">Поделитесь кодом — участники вводят его при входе</div>
+
+  <!-- Big code display -->
+  <div style="background:linear-gradient(135deg,rgba(108,99,255,0.12),rgba(91,160,144,0.1));border:2px solid rgba(108,99,255,0.25);border-radius:16px;padding:20px 28px;width:100%;margin-bottom:16px">
+    <div style="font-size:0.72rem;color:var(--t2);margin-bottom:6px;letter-spacing:0.06em;text-transform:uppercase">Код поездки</div>
+    <div id="qr-code" style="font-family:var(--mono);font-size:1.8rem;font-weight:700;letter-spacing:0.18em;color:var(--ac2);word-break:break-all"></div>
+    <button class="btn btn-p btn-fw" style="margin-top:14px" onclick="copyCode()"><i data-lucide="copy" style="width:14px;height:14px"></i> Скопировать код</button>
+  </div>
+
+  <!-- QR visual (real scannable QR) -->
+  <div style="background:#fff;border-radius:14px;padding:12px;display:inline-block;margin-bottom:14px">
+    <div id="qr-canvas" style="width:200px;height:200px"></div>
+  </div>
+
+  <!-- Link (only useful when hosted) -->
+  <div style="width:100%;margin-bottom:14px;text-align:left">
+    <div style="font-size:0.7rem;color:var(--t2);margin-bottom:5px">Прямая ссылка</div>
+    <div style="display:flex;align-items:center;gap:7px">
+      <div id="qr-link" style="flex:1;font-size:0.72rem;color:var(--t2);background:var(--s1);border:1px solid var(--b1);border-radius:var(--rxs);padding:7px 11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div>
+      <button class="btn btn-s btn-sm" onclick="copyLink()"><i data-lucide="copy" style="width:13px;height:13px"></i></button>
+    </div>
+    <div id="qr-hint" style="font-size:0.72rem;margin-top:7px;line-height:1.5;padding:8px 10px;border-radius:var(--rxs)"></div>
+  </div>
+  <button class="btn btn-p btn-fw" onclick="waShare()"><i data-lucide="share-2" style="width:14px;height:14px"></i> Поделиться в WhatsApp</button>
+</div></div>
+
+<!-- MY ORDER -->
+<div class="ov" id="m-my-order"><div class="mdl" style="max-height:92vh;display:flex;flex-direction:column">
+  <div class="mdl-handle"></div>
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+    <div class="mdl-title">✏️ Мой заказ</div>
+    <button class="btn btn-g btn-sm btn-ic" onclick="closeModal('m-my-order')"><i data-lucide="x" style="width:15px;height:15px"></i></button>
+  </div>
+  <div style="overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:13px">
+    <!-- Participant selector -->
+    <div class="iw">
+      <label class="il">Для кого заказ?</label>
+      <div id="mo-participant" style="display:flex;gap:7px;flex-wrap:wrap"></div>
+    </div>
+    <!-- Order text -->
+    <div class="iw">
+      <label class="il">Что заказал?</label>
+      <textarea class="inp" id="mo-txt" placeholder="Пиво 2 по 4€&#10;Салат за 7,50€&#10;Пицца Маргарита 12.90&#10;3 воды - 1.5€" style="min-height:130px;font-size:0.88rem"></textarea>
+    </div>
+    <!-- Parse button -->
+    <button class="btn btn-p btn-fw" onclick="parseMyOrder()"><i data-lucide="plus-circle" style="width:14px;height:14px"></i> Добавить мой заказ</button>
+    <!-- Loading -->
+    <div id="mo-loading" class="ld" style="display:none"><div class="spin"></div><span>AI разбирает...</span></div>
+    <!-- Parsed result -->
+    <div id="mo-result" style="display:none;flex-direction:column;gap:10px">
+      <div style="display:flex;flex-direction:column;gap:4px" id="mo-items-list"></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:11px 14px;background:var(--s2);border-radius:var(--rsm)">
+        <span style="font-weight:600">Итого:</span>
+        <span style="font-family:var(--mono);font-weight:700;font-size:1.1rem;color:var(--green)" id="mo-total">0,00 €</span>
+      </div>
+      <!-- Expense name -->
+      <div class="iw">
+        <label class="il">Название расхода</label>
+        <input class="inp" id="mo-exp-name" placeholder="Ресторан / Магазин...">
+      </div>
+      <!-- Payer -->
+      <div class="iw">
+        <label class="il">Кто оплатил?</label>
+        <div id="mo-payer" style="display:flex;gap:7px;flex-wrap:wrap"></div>
+      </div>
+      <!-- Save -->
+      <button class="btn btn-p btn-fw" onclick="saveMyOrder()"><i data-lucide="check" style="width:14px;height:14px"></i> Сохранить расход</button>
+    </div>
+  </div>
+</div></div>
+
+<!-- ADD CASH -->
+<div class="ov" id="m-add-cash"><div class="mdl">
+  <div class="mdl-handle"></div>
+  <div style="display:flex;align-items:center;justify-content:space-between">
+    <div class="mdl-title">Пополнить кассу</div>
+    <button class="btn btn-g btn-sm btn-ic" onclick="closeModal('m-add-cash')"><i data-lucide="x" style="width:15px;height:15px"></i></button>
+  </div>
+  <div class="iw"><label class="il">Кто вносит?</label><div id="ac-contributor" style="display:flex;gap:7px;flex-wrap:wrap"></div></div>
+  <div class="iw"><label class="il">Сумма, €</label><input class="inp" id="ac-amt" type="number" placeholder="0,00" min="0" step="0.01"></div>
+  <button class="btn btn-p btn-fw" onclick="saveCash()"><i data-lucide="wallet" style="width:14px;height:14px"></i> Пополнить</button>
+</div></div>
+
+<!-- EDIT CASH -->
+<div class="ov" id="m-edit-cash"><div class="mdl">
+  <div class="mdl-handle"></div>
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+    <div class="mdl-title">Редактировать кассу</div>
+    <button class="btn btn-g btn-sm btn-ic" onclick="closeModal('m-edit-cash')"><i data-lucide="x" style="width:15px;height:15px"></i></button>
+  </div>
+  <div id="ec-list" style="display:flex;flex-direction:column;gap:8px;max-height:55vh;overflow-y:auto"></div>
+  <div style="margin-top:12px;display:flex;gap:8px">
+    <button class="btn btn-p btn-fw" onclick="saveEditedContribs()"><i data-lucide="check" style="width:14px;height:14px"></i> Сохранить</button>
+  </div>
+</div></div>
+
+<!-- MEMBER DETAIL -->
+<div class="ov" id="m-member-detail"><div class="mdl" style="max-height:88vh;display:flex;flex-direction:column">
+  <div class="mdl-handle"></div>
+  <div id="m-member-detail-content" style="overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:14px"></div>
+</div></div>
+
+<!-- DEBT DETAIL -->
+<div class="ov" id="m-debt-detail"><div class="mdl">
+  <div class="mdl-handle"></div>
+  <div id="m-debt-detail-content"></div>
+</div></div>
+
+<!-- RENAME MEMBER -->
+<div class="ov" id="m-rename"><div class="mdl">
+  <div class="mdl-handle"></div>
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+    <div class="mdl-title">Изменить имя</div>
+    <button class="btn btn-g btn-sm btn-ic" onclick="closeModal('m-rename')"><i data-lucide="x" style="width:15px;height:15px"></i></button>
+  </div>
+  <input type="hidden" id="ren-old">
+  <div class="iw"><label class="il">Новое имя</label><input class="inp" id="ren-new" onkeydown="if(event.key==='Enter')saveRename()"></div>
+  <button class="btn btn-p btn-fw" onclick="saveRename()"><i data-lucide="check" style="width:15px;height:15px"></i> Сохранить</button>
+</div></div>
+
+<!-- ADD MEMBER (settings) -->
+<div class="ov" id="m-add-mbr"><div class="mdl">
+  <div class="mdl-handle"></div>
+  <div class="mdl-title">Добавить участника</div>
+  <div class="iw"><label class="il">Имя</label><input class="inp" id="am-name"></div>
+  <div class="iw"><label class="il">Пол</label><select class="inp" id="am-gender"><option value="m">М — Мужской</option><option value="f">Ж — Женский</option></select></div>
+  <button class="btn btn-p btn-fw" onclick="saveMember()"><i data-lucide="check" style="width:15px;height:15px"></i> Добавить</button>
+</div></div>
+
+<script>
+// =======================================================
+// STATE
+// =======================================================
+// Цвета для тёмной темы (пастель — хороший контраст на тёмном фоне)
+const COLORS=['#818cf8','#34d399','#fb7185','#fbbf24','#38bdf8','#e879f9','#f97316','#4ade80','#f472b6','#a78bfa'];
+const GRP_COLORS=['#c084fc','#6ee7b7','#f87171','#fde047','#7dd3fc','#f0abfc'];
+// Цвета для светлой темы (насыщенные тёмные — WCAG AA на светлом фоне, мин. 4.5:1)
+const LIGHT_COLORS=['#3730a3','#047857','#be123c','#92400e','#075985','#7e22ce','#9a3412','#166534','#9d174d','#5b21b6'];
+const LIGHT_GRP_COLORS=['#5b21b6','#065f46','#991b1b','#713f12','#0c4a6e','#701a75'];
+function _isLightTheme(){
+  const t=document.documentElement.getAttribute('data-theme');
+  if(t==='light')return true;
+  if(t==='dark')return false;
+  return window.matchMedia?.('(prefers-color-scheme:light)').matches;
+}
+const S = {
+  trip: null,
+  me: null,
+  meGender: 'm',
+  isAdmin: false,
+  adminName: '',
+  coAdmins: [],   // дополнительные администраторы
+  members: [],
+  groups: [],
+  expenses: [],
+  treasury: {total:0, spent:0, contributions:[], holder:null},
+  receipts: [],
+  memberColors: {},    // name → hex color (custom avatar color)
+  settledDebts: [],    // [{id, from, to, amount, date}] — погашённые долги
+  inviteToken: null,   // UUID из trip_tokens — хранится в sw_invite_TRIPID
+  adminToken: null,    // UUID организатора — хранится в sw_admin_TRIPID (только локально)
+  balTab: 'debts',
+  scan: {mode:'receipt',items:[],menuSelections:{},menuPaidBy:null},
+  assignIdx: null,
+};
+// Проверка: является ли участник администратором (учитывает и основного, и сo-admins)
+function isAdm(name){return name===S.adminName||(S.coAdmins||[]).includes(name);}
+
+let CT = {members:[]};
+let _sbSyncing  = false;
+let _lastSyncTime = 0;   // timestamp последнего нашего sbSync
+let _syncTimer  = null;
+let _rtChannel  = null;
+
+// =======================================================
+// UTILS
+// =======================================================
+function ac(name){
+  if(S.memberColors&&S.memberColors[name])return S.memberColors[name];
+  const light=_isLightTheme();
+  const cols=light?LIGHT_COLORS:COLORS;
+  const grp=light?LIGHT_GRP_COLORS:GRP_COLORS;
+  const gi=S.groups.findIndex(g=>g.members.includes(name));
+  if(gi>=0)return grp[gi%grp.length];
+  let h=0;for(let i=0;i<name.length;i++)h=name.charCodeAt(i)+((h<<5)-h);
+  return cols[Math.abs(h)%cols.length];
+}
+function mg(name){const m=S.members.find(x=>x.name===name);return m?m.gender:'m'}
+function owes(name){return mg(name)==='f'?'должна':'должен'}
+function fm(n){return (Math.round(n*100)/100).toLocaleString('ru-RU',{minimumFractionDigits:2,maximumFractionDigits:2})}
+function today(){return new Date().toISOString().split('T')[0]}
+function fdate(s){if(!s)return '';const d=new Date(s+'T12:00:00');return d.toLocaleDateString('ru-RU',{day:'numeric',month:'long'})}
+function uid(){return crypto.randomUUID()}
+
+// ── API URL: в браузере/PWA — относительный путь, в Capacitor (Android) — абсолютный Netlify URL
+// Это нужно потому что в Capacitor WebView относительные URL ведут на локальный сервер (которого нет)
+const API_BASE = (()=>{
+  try{
+    if(window.Capacitor?.isNativePlatform?.()) return 'https://splitaway.netlify.app';
+  }catch{}
+  return '';
+})();
+
+// SHA-256 hex digest — для хэширования admin_token перед отправкой в БД
+async function sha256hex(text){
+  const buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+// Динамическая загрузка QRCode (только при открытии QR-окна)
+let _qrLoading=null;
+function loadQRCode(){
+  if(typeof QRCode!=='undefined')return Promise.resolve();
+  if(_qrLoading)return _qrLoading;
+  _qrLoading=new Promise((res,rej)=>{
+    const s=document.createElement('script');
+    s.src='https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js';
+    s.onload=()=>{_qrLoading=null;res();};
+    s.onerror=()=>rej(new Error('QRCode load failed'));
+    document.head.appendChild(s);
+  });
+  return _qrLoading;
+}
+// Динамическая загрузка Tesseract.js (только как fallback OCR)
+let _tessLoading=null;
+function loadTesseract(){
+  if(typeof Tesseract!=='undefined')return Promise.resolve();
+  if(_tessLoading)return _tessLoading;
+  _tessLoading=new Promise((res,rej)=>{
+    const s=document.createElement('script');
+    s.src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+    s.onload=()=>{_tessLoading=null;res();};
+    s.onerror=()=>rej(new Error('Tesseract load failed'));
+    document.head.appendChild(s);
+  });
+  return _tessLoading;
+}
+function toast(msg){const w=document.getElementById('tw');const t=document.createElement('div');t.className='toast';t.textContent=msg;w.appendChild(t);setTimeout(()=>t.remove(),3100)}
+function openModal(id){document.getElementById(id).classList.add('open');document.body.style.overflow='hidden'}
+function closeModal(id){document.getElementById(id).classList.remove('open');document.body.style.overflow=''}
+document.addEventListener('click',e=>{if(e.target.classList.contains('ov')){e.target.classList.remove('open');document.body.style.overflow=''}})
+
+function groupOf(name){return S.groups.find(g=>g.members.includes(name))}
+function units(name){const g=groupOf(name);return g?g.members.length:1}
+
+// =======================================================
+// ONBOARDING
+// =======================================================
+function showOb(id){['ob-s1','ob-create','ob-pick'].forEach(x=>{const el=document.getElementById(x);el.style.display=x===id?'flex':'none'})}
+
+// Create trip temp members
+function ctAddMember(){
+  const n=document.getElementById('ct-m-name').value.trim();
+  const g=document.getElementById('ct-m-g').value;
+  if(!n||CT.members.find(m=>m.name===n)){document.getElementById('ct-m-name').value='';return}
+  CT.members.push({name:n,gender:g});
+  document.getElementById('ct-m-name').value='';
+  renderCTMembers();
+}
+function ctRemMember(i){CT.members.splice(i,1);renderCTMembers()}
+function renderCTMembers(){
+  document.getElementById('ct-members').innerHTML=CT.members.map((m,i)=>
+    `<div class="chip on" style="background:${ac(m.name)};border-color:${ac(m.name)};gap:5px">
+      ${m.name}<span style="opacity:0.65;font-size:0.68rem">${m.gender==='f'?'Ж':'М'}</span>
+      <span onclick="ctRemMember(${i})" style="cursor:pointer;opacity:0.7">×</span>
+    </div>`).join('')
+}
+
+async function createTrip(){
+  const name=document.getElementById('ct-name').value.trim();
+  const dest=document.getElementById('ct-dest').value.trim();
+  const admin=document.getElementById('ct-admin').value.trim();
+  const adminG=document.getElementById('ct-admin-g').value;
+  const cash=parseFloat(document.getElementById('ct-cash').value)||0;
+  if(!name||!admin){toast('⚠️ Введите название и ваше имя');return}
+  const allMembers=[...CT.members];
+  if(!allMembers.find(m=>m.name===admin))allMembers.unshift({name:admin,gender:adminG});
+  const prefix=(dest||name).toUpperCase().replace(/[^A-Z]/g,'').substring(0,3).padEnd(3,'X');
+  // Криптографически случайный суффикс (4 байта → base36)
+  const rnd=new Uint32Array(1);crypto.getRandomValues(rnd);
+  const suffix=rnd[0].toString(36).toUpperCase().padStart(6,'0').substring(0,6);
+  const tripId=prefix+'-'+suffix; // напр. TOR-4KM2X8
+
+  // Генерируем adminToken (UUID, хранится только локально)
+  const adminToken=crypto.randomUUID();
+  const adminTokenHash=await sha256hex(adminToken);
+
+  S.trip={id:tripId,name,dest};
+  S.members=[...allMembers];
+  S.groups=[];S.expenses=[];
+  S.treasury={total:cash,spent:0,contributions:cash>0?[{member:admin,amount:cash,date:today()}]:[],holder:null};
+  S.receipts=[];
+  S.me=admin;S.meGender=adminG;S.isAdmin=true;S.adminName=admin;
+  S.adminToken=adminToken;
+  S.inviteToken=null; // будет получен из Supabase
+  CT={members:[]};
+
+  // Создаём поездку через защищённый RPC (получаем invite_token)
+  if(USE_SUPABASE){
+    try{
+      const sb=await getSupabase();
+      if(sb){
+        const{data,error}=await sb.rpc('create_trip',{
+          p_trip_id:tripId,
+          p_name:name,
+          p_dest:dest||null,
+          p_admin_token_hash:adminTokenHash,
+          p_members:allMembers.map(m=>({name:m.name,gender:m.gender||'m',is_admin:m.name===admin})),
+          p_treasury_total:cash,
+          p_treasury_contributions:cash>0?[{member:admin,amount:cash,date:today()}]:[]
+        });
+        if(error)throw error;
+        S.inviteToken=data.invite_token;
+        console.log('[SB] Trip created, invite_token:',S.inviteToken);
+      }
+    }catch(e){
+      console.warn('[SB] create_trip RPC error:',e.message||e);
+      toast('⚠️ Ошибка создания в базе — поездка сохранена локально');
+    }
+  }
+
+  save();launch();
+}
+
+function renderPickList(){
+  document.getElementById('ob-pick-trip').textContent=S.trip.name;
+  document.getElementById('ob-pick-list').innerHTML=S.members.map(m=>
+    `<button class="btn btn-s btn-fw" onclick="pickName('${m.name}')" style="justify-content:flex-start;gap:11px">
+      <div class="av av-sm" style="background:${ac(m.name)}">${m.name[0]}</div>
+      <span style="font-weight:600;color:${ac(m.name)}">${m.name}</span>
+      <span style="color:var(--t3);font-size:0.73rem;margin-left:auto">${m.gender==='f'?'Ж':'М'}</span>
+    </button>`).join('');
+}
+async function joinTrip(){
+  const code=document.getElementById('ob-code').value.trim().toUpperCase();
+  if(!code){toast('Введите код поездки');return}
+
+  // invite_token: из URL (сохранён в init) или из localStorage (повторный визит)
+  const inviteToken=window._pendingInviteToken||localStorage.getItem('sw_invite_'+code)||null;
+  delete window._pendingInviteToken;
+
+  // 1. Supabase — синхронизация между устройствами
+  if(USE_SUPABASE){
+    try{
+      const ok=await loadFromSupabase(code);
+      if(ok){
+        S.isAdmin=false;
+        if(inviteToken){
+          S.inviteToken=inviteToken;
+          localStorage.setItem('sw_invite_'+code,inviteToken);
+        } else {
+          toast('ℹ️ Для добавления расходов попросите организатора переслать вам ссылку-приглашение');
+        }
+        showOb('ob-pick');renderPickList();return;
+      }
+      // Supabase ответил, но поездка не найдена — не искать в localStorage
+      toast('❌ Поездка не найдена в базе. Проверьте код.');
+      return;
+    }catch(e){
+      console.warn('[SB] joinTrip error:',e);
+      toast('❌ Ошибка соединения: '+(e.message||e));
+      return;
+    }
+  }
+
+  // Fallback — localStorage (только если Supabase выключен)
+  const raw=localStorage.getItem('sw_'+code);
+  if(!raw){toast('❌ Поездка не найдена');return}
+  const d=JSON.parse(raw);
+  S.trip=d.trip;S.adminName=d.adminName||'';S.coAdmins=d.coAdmins||[];
+  S.members=(d.members||[]).map(m=>typeof m==='string'?{name:m,gender:'m'}:m);
+  S.groups=d.groups||[];S.expenses=d.expenses||[];
+  S.treasury=d.treasury||{total:0,spent:0,contributions:[],holder:null};
+  if(!S.treasury.contributions)S.treasury.contributions=[];
+  S.receipts=d.receipts||[];
+  S.memberColors=d.memberColors||{};
+  S.settledDebts=d.settledDebts||[];
+  S.isAdmin=false;
+  showOb('ob-pick');renderPickList();
+}
+function pickName(name){
+  S.me=name;S.meGender=S.members.find(m=>m.name===name)?.gender||'m';
+  S.isAdmin=isAdm(name);launch()
+}
+
+// =======================================================
+// LAUNCH
+// =======================================================
+function launch(){
+  // Fallback: если adminName не сохранён (старая поездка) — берём первого участника или себя
+  if(!S.adminName){
+    if(S.isAdmin) S.adminName=S.me;
+    else if(S.members.length) S.adminName=S.members[0].name;
+  }
+  document.getElementById('pg-ob').style.display='none';
+  document.getElementById('pg-app').style.display='flex';
+  document.getElementById('app-trip-name').textContent=S.trip.name;
+  document.getElementById('app-trip-sub').textContent=(S.trip.dest||S.trip.id)+' · '+S.members.length+' уч.';
+  document.getElementById('ae-date').value=today();
+  renderAll();lucide.createIcons();
+  if(typeof USE_SUPABASE!=='undefined'&&USE_SUPABASE) startRealtime();
+}
+function renderAll(){
+  renderDash();renderExpenses();renderBalances();renderTreasury();renderSettings();
+  renderAEModal();lucide.createIcons()
+}
+
+// =======================================================
+// DASHBOARD
+// =======================================================
+function renderDash(){
+  const total=S.expenses.reduce((s,e)=>s+e.amount,0);
+  document.getElementById('d-total').textContent=fm(total);
+  document.getElementById('d-cnt').textContent=S.expenses.length;
+  document.getElementById('d-mbr').textContent=S.members.length;
+
+  // My balance
+  const bal=calcBal();const debts=simplify(bal);
+  const myOwe=debts.filter(d=>d.from===S.me);
+  const myOwed=debts.filter(d=>d.to===S.me);
+  const myEl=document.getElementById('d-mybal');
+  const sumEl=document.getElementById('d-mybal-summary');
+  const totalOwe=myOwe.reduce((s,d)=>s+d.amount,0);
+  const totalOwed=myOwed.reduce((s,d)=>s+d.amount,0);
+  const netBal=totalOwed-totalOwe;
+  if(sumEl){
+    if(!myOwe.length&&!myOwed.length){sumEl.textContent='✓ OK';sumEl.style.color='var(--green)';}
+    else if(netBal>=0){sumEl.textContent='+'+fm(netBal)+' €';sumEl.style.color='var(--green)';}
+    else{sumEl.textContent=fm(netBal)+' €';sumEl.style.color='var(--red)';}
+  }
+  if(!myOwe.length&&!myOwed.length){
+    myEl.innerHTML='<div class="emp" style="padding:14px"><div class="emp-t">Вы в балансе 🎉</div></div>'
+  } else {
+    myEl.innerHTML=[
+      ...myOwe.map(d=>`<div class="dr">
+        <div class="av av-sm" style="background:${ac(d.to)}">${d.to[0]}</div>
+        <div style="flex:1;font-size:0.86rem">
+          <span style="color:${ac(S.me)};font-weight:600">${S.me}</span>
+          <span style="color:var(--t2)"> ${owes(S.me)} </span>
+          <span style="color:${ac(d.to)};font-weight:600">${d.to}</span>
+        </div>
+        <div class="da neg">-${fm(d.amount)} €</div>
+      </div>`),
+      ...myOwed.map(d=>`<div class="dr">
+        <div class="av av-sm" style="background:${ac(d.from)}">${d.from[0]}</div>
+        <div style="flex:1;font-size:0.86rem">
+          <span style="color:${ac(d.from)};font-weight:600">${d.from}</span>
+          <span style="color:var(--t2)"> ${owes(d.from)} вам</span>
+        </div>
+        <div class="da pos">+${fm(d.amount)} €</div>
+      </div>`)
+    ].join('')
+  }
+
+  // Recent
+  const rec=[...S.expenses].reverse().slice(0,3);
+  document.getElementById('d-recent').innerHTML=rec.length
+    ?rec.map(e=>expRow(e)).join('')
+    :'<div class="emp" style="padding:14px"><div class="emp-ic">🧾</div><div class="emp-t">Нет расходов</div></div>';
+
+  renderMembersList();
+  lucide.createIcons()
+}
+function toggleMyBal(){
+  const el=document.getElementById('d-mybal');
+  const chev=document.getElementById('chev-mybal');
+  if(!el)return;
+  const open=el.style.display!=='none';
+  el.style.display=open?'none':'flex';
+  el.style.flexDirection='column';el.style.gap='7px';
+  if(chev)chev.style.transform=open?'rotate(-90deg)':'rotate(0deg)';
+}
+
+function renderMembersList(){
+  const paid=calcPaid();const bal=calcBal();const debts=simplify(bal);
+  const rendered=new Set();const items=[];
+
+  // Groups
+  S.groups.forEach(g=>{
+    const vm=g.members.filter(n=>S.members.find(m=>m.name===n));
+    if(!vm.length)return;
+    vm.forEach(n=>rendered.add(n));
+    const isCouple=g.type==='couple';
+    const totalPaid=vm.reduce((s,n)=>s+(paid[n]||0),0);
+    const isMe=vm.includes(S.me);
+    const lbl=isCouple?'♥ Пара':`👨‍👩‍👧 ${g.label||'Семья'}`;
+    const bc=isCouple?'rgba(255,95,110,0.28)':'rgba(245,158,11,0.28)';
+    const headBg=isCouple?'rgba(255,95,110,0.09)':'rgba(245,158,11,0.09)';
+    const headC=isCouple?'var(--red)':'var(--amber)';
+    const rowBdr=isCouple?'rgba(255,95,110,0.1)':'rgba(245,158,11,0.1)';
+    items.push(`
+      <div style="border:1px solid ${bc};border-radius:var(--r);overflow:hidden;background:linear-gradient(135deg,${isCouple?'rgba(255,95,110,0.04)':'rgba(245,158,11,0.04)'},rgba(108,99,255,0.02))">
+        <div style="padding:7px 13px;background:${headBg};border-bottom:1px solid ${bc};display:flex;align-items:center;gap:7px">
+          <span style="font-size:0.76rem;color:${headC};font-weight:700">${lbl}</span>
+          ${isMe?'<span style="font-size:0.62rem;background:var(--aglow);color:var(--ac2);padding:2px 6px;border-radius:4px;font-weight:600">вы здесь</span>':''}
+          <div style="margin-left:auto;font-size:0.75rem;color:var(--t2)">Вместе: <span style="color:var(--text);font-weight:600;font-family:var(--mono)">${fm(totalPaid)} €</span></div>
+        </div>
+        ${vm.map((n,idx)=>{
+          const last=memberLastAction(n);
+          const lastHtml=last
+            ?`<span style="color:var(--t2);font-size:0.7rem">${last.name} · ${fdate(last.date)}</span>`
+            :'<span style="color:var(--green);font-size:0.7rem">✓ OK</span>';
+          return `<div style="display:flex;align-items:center;gap:11px;padding:11px 13px${idx?`;border-top:1px solid ${rowBdr}`:''}cursor:pointer" onclick="showMemberDetail('${n}')">
+            <div class="av av-md" style="background:${ac(n)}">${n[0]}</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-weight:600;font-size:0.88rem;color:${ac(n)}">${n}${n===S.adminName?' <span style="font-size:0.6rem;background:rgba(108,99,255,0.2);color:var(--ac2);padding:1px 6px;border-radius:4px;font-weight:700;margin-left:4px;vertical-align:middle">Admin</span>':''}${n===S.me?' <span style="color:var(--ac2);font-size:0.7rem">(вы)</span>':''}</div>
+              <div style="margin-top:2px">${lastHtml}</div>
+            </div>
+            <div style="text-align:right;flex-shrink:0">
+              <div style="font-family:var(--mono);font-weight:700;font-size:0.86rem">${fm(paid[n]||0)}</div>
+              <div style="font-size:0.68rem;color:var(--t3)">€ оплатил</div>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>`);
+  });
+
+  // Solo
+  S.members.filter(m=>!rendered.has(m.name)).forEach(m=>{
+    const last=memberLastAction(m.name);
+    const lastHtml=last
+      ?`<span style="color:var(--t2);font-size:0.7rem">${last.name} · ${fdate(last.date)}</span>`
+      :'<span style="color:var(--green);font-size:0.7rem">✓ OK</span>';
+    items.push(`
+      <div class="er" style="cursor:pointer" onclick="showMemberDetail('${m.name}')">
+        <div class="av av-md" style="background:${ac(m.name)}">${m.name[0]}</div>
+        <div class="ei">
+          <div class="en" style="color:${ac(m.name)}">${m.name}${m.name===S.adminName?' <span style="font-size:0.6rem;background:rgba(108,99,255,0.2);color:var(--ac2);padding:1px 6px;border-radius:4px;font-weight:700;margin-left:4px;vertical-align:middle">Admin</span>':''}${m.name===S.me?' <span style="color:var(--ac2);font-size:0.73rem">(вы)</span>':''}</div>
+          <div style="margin-top:3px">${lastHtml}</div>
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          <div style="font-family:var(--mono);font-weight:700;font-size:0.88rem">${fm(paid[m.name]||0)}</div>
+          <div style="font-size:0.68rem;color:var(--t3)">€ оплатил</div>
+        </div>
+      </div>`);
+  });
+  document.getElementById('d-members').innerHTML=items.join('');
+  lucide.createIcons()
+}
+
+function memberLastAction(name){
+  return [...S.expenses].reverse().find(e=>
+    e.paidBy===name||(e.participants&&e.participants.includes(name)));
+}
+
+function showMemberDetail(name){
+  const m=S.members.find(x=>x.name===name);if(!m)return;
+  const bal=calcBal();const debts=simplify(bal);
+  const myDebts=debts.filter(d=>d.from===name);
+  const myOwed=debts.filter(d=>d.to===name);
+  const exps=[...S.expenses].reverse().filter(e=>
+    e.paidBy===name||(e.participants&&e.participants.includes(name)));
+
+  // Группируем расходы по датам
+  const byDate={};
+  exps.forEach(e=>{const k=e.date||'nodate';if(!byDate[k])byDate[k]=[];byDate[k].push(e);});
+  const sortedDates=Object.keys(byDate).sort().reverse();
+
+  const histHtml=exps.length?sortedDates.map(dt=>{
+    const dayExps=byDate[dt];
+    const dateLabel=dt==='nodate'?'Без даты':fdate(dt);
+    return `<div style="margin-bottom:4px">
+      <div style="font-size:0.72rem;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:0.07em;padding:8px 2px 5px">${dateLabel}</div>
+      ${dayExps.map(e=>{
+        const isPayer=e.paidBy===name;
+        const share=isPayer?e.amount:(e.participants&&e.participants.length?e.amount/e.participants.length:0);
+        return `<div class="er" onclick="closeModal('m-member-detail');showExpDetail('${e.id}')">
+          <div style="width:36px;height:36px;border-radius:var(--rxs);background:var(--s2);display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0">${e.fromTreasury?'💰':'💳'}</div>
+          <div class="ei">
+            <div class="en">${e.name}</div>
+            <div class="em">
+              ${isPayer?`<span style="color:var(--green);font-size:0.72rem;font-weight:600">Платил</span>`:`<span style="color:var(--t3);font-size:0.72rem">Участник</span>`}
+            </div>
+          </div>
+          <div style="text-align:right;flex-shrink:0">
+            <div style="font-family:var(--mono);font-weight:700;font-size:0.88rem;color:${isPayer?'var(--green)':'var(--text)'}">${isPayer?'+':''}${fm(isPayer?e.amount:share)}</div>
+            <div style="font-size:0.67rem;color:var(--t3)">EUR</div>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>`;
+  }).join(''):`<div class="emp" style="padding:20px"><div class="emp-ic">📭</div><div class="emp-t">Нет расходов</div></div>`;
+
+  const isMe=name===S.me;
+
+  document.getElementById('m-member-detail-content').innerHTML=`
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0 0">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div class="av" style="width:50px;height:50px;background:${ac(name)};font-size:1.3rem;box-shadow:0 0 20px ${ac(name)}55">${name[0]}</div>
+        <div>
+          <div style="font-weight:800;font-size:1.15rem;color:${ac(name)}">${name}${isMe?` <span style="font-size:0.65rem;background:var(--aglow);color:var(--ac2);padding:2px 7px;border-radius:4px;vertical-align:middle">вы</span>`:''}${name===S.adminName?` <span style="font-size:0.6rem;background:rgba(108,99,255,0.18);color:var(--ac2);padding:2px 6px;border-radius:4px;vertical-align:middle">Admin</span>`:''}</div>
+          <div style="font-size:0.75rem;color:var(--t2);margin-top:2px">${exps.length} расходов · ${m.gender==='f'?'участница':'участник'}</div>
+        </div>
+      </div>
+      <button class="btn btn-g btn-sm btn-ic" onclick="closeModal('m-member-detail')"><i data-lucide="x" style="width:15px;height:15px"></i></button>
+    </div>
+
+    ${myDebts.length||myOwed.length?`
+    <div style="display:flex;flex-direction:column;gap:7px">
+      <div class="sec-ttl">Баланс</div>
+      ${myOwed.map(d=>`<div style="display:flex;align-items:center;gap:9px;padding:10px 12px;background:var(--gglow);border:1px solid rgba(34,211,160,0.25);border-radius:var(--rsm)">
+        <div class="av av-sm" style="background:${ac(d.from)}">${d.from[0]}</div>
+        <div style="flex:1;font-size:0.86rem"><span style="color:${ac(d.from)};font-weight:700">${d.from}</span> <span style="color:var(--t2)">должен вам</span></div>
+        <div style="font-family:var(--mono);font-weight:700;color:var(--green)">+${fm(d.amount)} €</div>
+      </div>`).join('')}
+      ${myDebts.map(d=>`<div style="display:flex;align-items:center;gap:9px;padding:10px 12px;background:var(--rglow);border:1px solid rgba(255,95,110,0.25);border-radius:var(--rsm)">
+        <div class="av av-sm" style="background:${ac(d.to)}">${d.to[0]}</div>
+        <div style="flex:1;font-size:0.86rem"><span style="color:var(--t2)">Должен </span><span style="color:${ac(d.to)};font-weight:700">${d.to}</span></div>
+        <div style="font-family:var(--mono);font-weight:700;color:var(--red)">-${fm(d.amount)} €</div>
+      </div>`).join('')}
+    </div>`:`<div style="padding:10px 12px;background:var(--gglow);border:1px solid rgba(34,211,160,0.25);border-radius:var(--rsm);font-size:0.86rem;color:var(--green);font-weight:600">✓ Нет долгов — всё ровно</div>`}
+
+    <div style="display:flex;flex-direction:column;gap:0">
+      <div class="sec-ttl" style="margin-bottom:4px">История расходов</div>
+      ${histHtml}
+    </div>
+  `;
+  openModal('m-member-detail');lucide.createIcons();
+}
+
+// =======================================================
+// EXPENSES
+// =======================================================
+function expRow(e){
+  const comment=e.comment?`<span style="color:var(--amber);font-size:0.7rem"> · ${e.comment}</span>`:'';
+  const dt=e.date?`<span style="color:var(--t3)">${fdate(e.date)}</span>`:'';
+  const hasItems=e.items&&e.items.length>0;
+  return `<div class="er" onclick="showExpDetail('${e.id}')" style="cursor:pointer">
+    <div style="width:38px;height:38px;border-radius:var(--rxs);background:var(--s2);display:flex;align-items:center;justify-content:center;font-size:1.2rem;flex-shrink:0">${e.fromTreasury?'💰':'💳'}</div>
+    <div class="ei">
+      <div class="en">${e.name}${comment}${hasItems?`<span style="font-size:0.65rem;background:rgba(108,99,255,0.18);color:var(--ac2);padding:1px 5px;border-radius:4px;margin-left:5px;vertical-align:middle">${e.items.length} поз.</span>`:''}</div>
+      <div class="em">
+        ${e.fromTreasury
+          ?`<span style="color:var(--green);font-weight:600">Из общей кассы</span>${dt}`
+          :`<span>Платил <span style="color:${ac(e.paidBy)};font-weight:600">${e.paidBy}</span></span>${dt}`}
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:7px;flex-shrink:0">
+      <div style="text-align:right">
+        <div style="font-family:var(--mono);font-weight:700;font-size:0.95rem">${fm(e.amount)}</div>
+        <div style="font-size:0.68rem;color:var(--t2)">EUR</div>
+      </div>
+      <i data-lucide="chevron-right" style="width:14px;height:14px;color:var(--t3)"></i>
+    </div>
+  </div>`
+}
+
+function renderExpenses(){
+  const el=document.getElementById('exp-list');
+  if(!S.expenses.length){el.innerHTML='<div class="emp"><div class="emp-ic">🧾</div><div class="emp-t">Нет расходов</div><div class="emp-s">Добавьте первый расход</div></div>';return}
+  // Group by date
+  const byDate={};const noDate=[];
+  [...S.expenses].reverse().forEach(e=>{
+    if(e.date){if(!byDate[e.date])byDate[e.date]=[];byDate[e.date].push(e);}
+    else noDate.push(e);
+  });
+  const dates=Object.keys(byDate).sort((a,b)=>b.localeCompare(a));
+  let html='';
+  dates.forEach(date=>{
+    const exps=byDate[date];
+    const dayTotal=exps.reduce((s,e)=>s+e.amount,0);
+    const gid='eg'+date.replace(/-/g,'');
+    html+=`<div style="cursor:pointer;padding:10px 14px;background:var(--s2);border:1px solid var(--b1);border-radius:var(--rsm);display:flex;align-items:center;justify-content:space-between;user-select:none" onclick="toggleExpGroup('${gid}')">
+      <div style="font-weight:700;font-size:0.9rem">${fdate(date)}</div>
+      <div style="display:flex;align-items:center;gap:9px">
+        <span style="font-family:var(--mono);font-weight:700;font-size:0.9rem">${fm(dayTotal)} €</span>
+        <i data-lucide="chevron-down" id="chev-${gid}" style="width:14px;height:14px;color:var(--t2);transition:transform 0.2s"></i>
+      </div>
+    </div>
+    <div id="${gid}" style="display:flex;flex-direction:column;gap:8px">${exps.map(e=>expRow(e)).join('')}</div>`;
+  });
+  if(noDate.length){
+    html+=`<div style="padding:5px 13px;font-size:0.73rem;color:var(--t3)">Без даты</div><div style="display:flex;flex-direction:column;gap:8px">${noDate.map(e=>expRow(e)).join('')}</div>`;
+  }
+  el.innerHTML=html;
+  lucide.createIcons()
+}
+function toggleExpGroup(gid){
+  const el=document.getElementById(gid);
+  const chev=document.getElementById('chev-'+gid);
+  if(!el)return;
+  const open=el.style.display!=='none';
+  el.style.display=open?'none':'flex';
+  if(chev)chev.style.transform=open?'rotate(-90deg)':'rotate(0deg)';
+}
+
+function showExpDetail(id){
+  const e=S.expenses.find(x=>x.id===id);if(!e)return;
+  const ps=perShare(e);
+  const canEdit=S.isAdmin;
+  document.getElementById('m-exp-detail-content').innerHTML=`
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px">
+      <div>
+        <div style="font-weight:700;font-size:1.1rem">${e.name}</div>
+        ${e.date?`<div style="font-size:0.76rem;color:var(--t2)">${fdate(e.date)}</div>`:''}
+        ${e.comment?`<div style="font-size:0.8rem;color:var(--amber);margin-top:2px">💬 ${e.comment}</div>`:''}
+      </div>
+      <button class="btn btn-g btn-sm btn-ic" onclick="closeModal('m-exp-detail')"><i data-lucide="x" style="width:15px;height:15px"></i></button>
+    </div>
+    <div class="hero" style="padding:18px;text-align:left;margin-bottom:14px">
+      <div style="font-size:1.9rem;font-weight:700;font-family:var(--mono)">${fm(e.amount)} <span style="font-size:0.9rem;color:var(--t2)">EUR</span></div>
+      <div style="margin-top:7px;display:flex;gap:7px;flex-wrap:wrap">
+        ${e.fromTreasury?'<span class="bdg bdg-am">Из кассы</span>':''}
+        ${!e.fromTreasury?`<span class="bdg bdg-p">${e.participants.length} участников</span>`:''}
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:7px;margin-bottom:14px">
+      ${e.fromTreasury
+        ?`<div style="font-size:0.84rem;color:var(--green);background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.22);border-radius:var(--rsm);padding:12px 14px;line-height:1.6">
+          💰 <b>Оплата из общей кассы</b><br>
+          <span style="color:var(--t2)">Все участники уже скинулись — долги не начислены</span>
+         </div>`
+        :`<div style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--s1);border-radius:var(--rsm)">
+          <div class="av av-sm" style="background:var(--gglow);color:var(--green)">💳</div>
+          <div style="flex:1;font-size:0.86rem">Платил: <span style="color:${ac(e.paidBy)};font-weight:600">${e.paidBy}</span></div>
+          <div style="font-family:var(--mono);font-weight:600">${fm(e.amount)} €</div>
+        </div>
+        ${e.participants.map(p=>{
+          const u=units(p);const sh=ps*u;
+          return `<div style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--s1);border-radius:var(--rsm)">
+            <div class="av av-sm" style="background:${ac(p)}">${p[0]}</div>
+            <div style="flex:1;font-size:0.86rem;color:${ac(p)};font-weight:500">${p}${u>1?`<span style="color:var(--t3);font-size:0.71rem;font-weight:400"> ×${u}</span>`:''}</div>
+            <div style="font-family:var(--mono);font-size:0.86rem">${fm(sh)} €</div>
+          </div>`
+        }).join('')}`}
+    </div>
+    ${e.items&&e.items.length?`
+    <div style="margin-bottom:14px">
+      <div class="sec-ttl" style="margin-bottom:8px">Заказы участников</div>
+      <div class="card" style="padding:14px">
+        ${e.items.map(it=>`<div class="ritem">
+          <div style="flex:1;font-size:0.86rem">${it.name}</div>
+          <div style="color:${it.assignedTo?ac(it.assignedTo):'var(--t2)'};font-size:0.76rem;font-weight:600">${it.assignedTo||'Все'}</div>
+          <div style="font-family:var(--mono);font-weight:600;font-size:0.86rem">${fm(it.price)} €</div>
+        </div>`).join('')}
+      </div>
+    </div>`:''}
+    ${canEdit?`<button class="btn btn-d btn-fw" onclick="delExp('${e.id}')"><i data-lucide="trash-2" style="width:13px;height:13px"></i> Удалить расход</button>`:''}
+  `;
+  openModal('m-exp-detail');lucide.createIcons()
+}
+
+function delExp(id){
+  if(!S.isAdmin){toast('❌ Только Админ');return}
+  const e=S.expenses.find(x=>x.id===id);
+  if(e&&e.fromTreasury)S.treasury.spent-=e.amount;
+  S.expenses=S.expenses.filter(x=>x.id!==id);
+  closeModal('m-exp-detail');save();renderAll();toast('🗑 Удалено')
+}
+
+// =======================================================
+// ADD EXPENSE MODAL
+// =======================================================
+function renderAEModal(){
+  // Payer buttons + treasury button
+  const pp=document.getElementById('ae-payer');
+  const remaining=S.treasury.total-S.treasury.spent;
+  const treasuryBtn=remaining>0
+    ?`<div class="wp" data-payer="_treasury" onclick="selPayer(this,'_treasury')" style="border-color:rgba(34,197,94,0.35);gap:5px">
+        <span style="font-size:1rem">💰</span>
+        <span style="color:var(--green);font-weight:600;font-size:0.8rem">Из кассы (${fm(remaining)} €)</span>
+      </div>`
+    :'';
+  if(pp)pp.innerHTML=S.members.map(m=>{
+    return `<div class="wp ${m.name===S.me?'on':''}" data-payer="${m.name}" onclick="selPayer(this,'${m.name}')">
+      <div class="av av-sm" style="background:${ac(m.name)}">${m.name[0]}</div>
+      <span style="color:${ac(m.name)};font-weight:600">${m.name}</span>
+    </div>`;
+  }).join('')+treasuryBtn;
+  // Participants list
+  renderAEParticipants();
+}
+
+function renderAEParticipants(){
+  const ap=document.getElementById('ae-participants');
+  if(!ap)return;
+  ap.innerHTML=S.members.map(m=>{
+    const u=units(m.name);
+    return `<label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:7px;border-radius:var(--rxs)">
+      <input type="checkbox" class="ae-check" value="${m.name}" style="accent-color:var(--accent);width:15px;height:15px">
+      <div class="av av-sm" style="background:${ac(m.name)}">${m.name[0]}</div>
+      <span style="font-size:0.86rem;flex:1;color:${ac(m.name)};font-weight:500">${m.name}</span>
+      ${u>1?`<span class="bdg bdg-r" style="font-size:0.66rem">×${u}</span>`:''}
+    </label>`;
+  }).join('');
+}
+
+function openAddExp(){
+  document.getElementById('ae-name').value='';
+  document.getElementById('ae-amt').value='';
+  document.getElementById('ae-comment').value='';
+  document.getElementById('ae-date').value=today();
+  // Restore participants wrap to normal state (in case was treasury last time)
+  const wrap=document.getElementById('ae-part-wrap');
+  if(wrap)wrap.innerHTML=`<label class="il">Разделить между</label>
+    <div style="display:flex;gap:7px;margin-bottom:7px"><button class="btn btn-s btn-sm" onclick="aeSelectAll()">Все</button><button class="btn btn-g btn-sm" onclick="aeSelectNone()">Очистить</button></div>
+    <div id="ae-participants" style="display:flex;flex-direction:column;gap:4px"></div>`;
+  renderAEModal();
+  // По умолчанию выбрать всех участников
+  document.querySelectorAll('.ae-check').forEach(c=>{ c.checked=true; });
+  openModal('m-add-exp')
+}
+
+function selPayer(el,name){
+  document.querySelectorAll('.wp[data-payer]').forEach(b=>b.classList.remove('on'));
+  el.classList.add('on');
+  const wrap=document.getElementById('ae-part-wrap');
+  if(!wrap)return;
+  if(name==='_treasury'){
+    wrap.innerHTML=`<label class="il" style="color:var(--green)">💰 Кто потреблял? (учёт доли в кассе)</label>
+      <div style="display:flex;gap:7px;margin-bottom:7px"><button class="btn btn-s btn-sm" onclick="aeSelectAll()">Все</button><button class="btn btn-g btn-sm" onclick="aeSelectNone()">Очистить</button></div>
+      <div id="ae-participants" style="display:flex;flex-direction:column;gap:4px"></div>`;
+    renderAEParticipants();
+    document.querySelectorAll('.ae-check').forEach(c=>{c.checked=true});
+  } else {
+    wrap.innerHTML=`<label class="il">Разделить между</label>
+      <div style="display:flex;gap:7px;margin-bottom:7px"><button class="btn btn-s btn-sm" onclick="aeSelectAll()">Все</button><button class="btn btn-g btn-sm" onclick="aeSelectNone()">Очистить</button></div>
+      <div id="ae-participants" style="display:flex;flex-direction:column;gap:4px"></div>`;
+    renderAEParticipants();
+    document.querySelectorAll('.ae-check').forEach(c=>{ c.checked=true; });
+  }
+}
+function aeSelectAll(){document.querySelectorAll('.ae-check').forEach(c=>c.checked=true)}
+function aeSelectNone(){document.querySelectorAll('.ae-check').forEach(c=>c.checked=false)}
+
+function saveExp(){
+  const name=document.getElementById('ae-name').value.trim();
+  const amt=parseFloat(document.getElementById('ae-amt').value);
+  const comment=document.getElementById('ae-comment').value.trim();
+  const date=document.getElementById('ae-date').value;
+  if(!name){toast('⚠️ Введите название');return}
+  if(!amt||amt<=0){toast('⚠️ Введите сумму');return}
+  const payerEl=document.querySelector('.wp.on[data-payer]');
+  const rawPayer=payerEl?payerEl.dataset.payer:S.me;
+  const fromTreasury=rawPayer==='_treasury';
+  // При оплате из кассы участники не нужны — все уже скинулись
+  if(fromTreasury){
+    if(amt>(S.treasury.total-S.treasury.spent)){toast('⚠️ Недостаточно средств в кассе');return}
+    const participants=[...document.querySelectorAll('.ae-check:checked')].map(c=>c.value);
+    const exp={id:uid(),name,amount:amt,comment,date,paidBy:'_treasury',
+      participants:participants.length?participants:S.members.map(m=>m.name),
+      fromTreasury:true,items:[]};
+    S.expenses.push(exp);
+    S.treasury.spent+=amt;
+    save();closeModal('m-add-exp');renderAll();toast('✅ Списано из кассы');return
+  }
+  const paidBy=rawPayer;
+  const participants=[...document.querySelectorAll('.ae-check:checked')].map(c=>c.value);
+  if(!participants.length){toast('⚠️ Выберите участников');return}
+  const exp={id:uid(),name,amount:amt,comment,date,paidBy,participants,fromTreasury:false,items:[]};
+  S.expenses.push(exp);
+  save();closeModal('m-add-exp');renderAll();toast('✅ Расход добавлен')
+}
+
+// =======================================================
+// BALANCES
+// =======================================================
+function calcPaid(){
+  const p={};S.members.forEach(m=>p[m.name]=0);
+  S.expenses.forEach(e=>{
+    if(e.fromTreasury)return; // из кассы — не учитывается как личная оплата
+    p[e.paidBy]=(p[e.paidBy]||0)+e.amount;
+  });
+  return p
+}
+function perShare(e){
+  let u=0;e.participants.forEach(p=>u+=units(p));
+  return u>0?e.amount/u:e.amount
+}
+function calcBal(){
+  const net={};S.members.forEach(m=>net[m.name]=0);
+  S.expenses.forEach(e=>{
+    if(e.fromTreasury)return; // из кассы — долги не начисляются, все уже скинулись
+    net[e.paidBy]=(net[e.paidBy]||0)+e.amount;
+    const ps=perShare(e);
+    e.participants.forEach(p=>net[p]=(net[p]||0)-ps*units(p));
+  });
+  // Учитываем погашённые долги (платёж from → to уменьшает долг from)
+  (S.settledDebts||[]).forEach(sd=>{
+    net[sd.from]=(net[sd.from]||0)+sd.amount;
+    net[sd.to]=(net[sd.to]||0)-sd.amount;
+  });
+  return net
+}
+function simplify(bal){
+  const cr=[],dt=[];
+  Object.entries(bal).forEach(([p,a])=>{if(a>0.01)cr.push({p,a});else if(a<-0.01)dt.push({p,a:-a})});
+  const txs=[];let ci=0,di=0;
+  while(ci<cr.length&&di<dt.length){
+    const c=cr[ci],d=dt[di],a=Math.min(c.a,d.a);
+    if(a>0.01)txs.push({from:d.p,to:c.p,amount:a});
+    c.a-=a;d.a-=a;if(c.a<0.01)ci++;if(d.a<0.01)di++;
+  }
+  return txs
+}
+
+function balTab(tab,btn){
+  S.balTab=tab;
+  document.querySelectorAll('#pg-bal .tab').forEach(t=>t.classList.remove('active'));
+  btn.classList.add('active');renderBalances()
+}
+function renderBalances(){
+  const el=document.getElementById('bal-content');
+  const bal=calcBal();const debts=simplify(bal);
+  if(S.balTab==='debts'){
+    const settled=S.settledDebts||[];
+    if(!debts.length&&!settled.length){el.innerHTML='<div class="emp"><div class="emp-ic">🎉</div><div class="emp-t">Все в расчёте!</div></div>';return}
+    let html=debts.map((d,i)=>`
+      <div class="dr" style="cursor:pointer" onclick="showDebtDetail('${d.from}','${d.to}',${d.amount})">
+        <div class="av av-sm" style="background:${ac(d.from)}">${d.from[0]}</div>
+        <div style="flex:1;font-size:0.86rem">
+          <span style="color:${ac(d.from)};font-weight:600">${d.from}</span>
+          <span style="color:var(--t2)"> ${owes(d.from)} </span>
+          <span style="color:${ac(d.to)};font-weight:600">${d.to}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:7px">
+          <div class="da neg">${fm(d.amount)} €</div>
+          <button class="btn btn-green btn-sm" onclick="event.stopPropagation();settleDebt('${d.from}','${d.to}',${d.amount})" title="Отметить как погашен" style="padding:5px 10px;font-size:0.75rem">✓</button>
+        </div>
+      </div>`).join('');
+    if(settled.length){
+      html+=`<div style="font-size:0.73rem;color:var(--t2);font-weight:600;letter-spacing:0.06em;text-transform:uppercase;padding:8px 4px 4px">Погашённые</div>`;
+      html+=[...settled].reverse().map(sd=>`
+        <div class="dr" style="opacity:0.55">
+          <div class="av av-sm" style="background:${ac(sd.from)}">${sd.from[0]}</div>
+          <div style="flex:1;font-size:0.86rem;text-decoration:line-through">
+            <span style="color:${ac(sd.from)};font-weight:600">${sd.from}</span>
+            <span style="color:var(--t2)"> → </span>
+            <span style="color:${ac(sd.to)};font-weight:600">${sd.to}</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:7px">
+            <div class="da" style="text-decoration:line-through">${fm(sd.amount)} €</div>
+            <button class="btn btn-g btn-sm" onclick="unsettle('${sd.id}')" title="Отменить погашение" style="padding:5px 8px;font-size:0.72rem">↩</button>
+          </div>
+        </div>`).join('');
+    }
+    el.innerHTML=html;
+  } else if(S.balTab==='persons'){
+    const paid=calcPaid();const mx=Math.max(...Object.values(paid).filter(x=>x>0),1);
+    el.innerHTML=S.members.map(m=>{
+      const net=bal[m.name]||0;
+      return `<div class="dr" style="flex-direction:column;align-items:flex-start;gap:7px;cursor:pointer" onclick="showPersonDetail('${m.name}')">
+        <div style="display:flex;align-items:center;gap:10px;width:100%">
+          <div class="av av-md" style="background:${ac(m.name)}">${m.name[0]}</div>
+          <div style="flex:1"><div style="font-weight:600;color:${ac(m.name)}">${m.name}</div><div style="font-size:0.73rem;color:var(--t2)">Оплатил: ${fm(paid[m.name]||0)} €</div></div>
+          <div class="da ${net>=0?'pos':'neg'}">${net>=0?'+':''}${fm(net)} €</div>
+        </div>
+        <div class="pb" style="width:100%"><div class="pf" style="width:${Math.min(100,(paid[m.name]||0)/mx*100)}%;background:${net>=0?'var(--green)':'var(--red)'}"></div></div>
+      </div>`
+    }).join('')
+  } else {
+    const settled=S.settledDebts||[];
+    if(!debts.length&&!settled.length){el.innerHTML='<div class="emp"><div class="emp-ic">✅</div><div class="emp-t">Все чисто!</div></div>';return}
+    let html=`<div class="card" style="background:var(--aglow);border-color:rgba(108,99,255,0.18);margin-bottom:7px"><div style="font-size:0.8rem;color:var(--ac2);font-weight:600;margin-bottom:3px">⚡ Оптимизированный расчёт</div><div style="font-size:0.76rem;color:var(--t2)">Минимум переводов</div></div>`;
+    html+=debts.map((d,i)=>`<div class="dr" style="cursor:pointer" onclick="showDebtDetail('${d.from}','${d.to}',${d.amount})">
+      <div style="width:19px;height:19px;border-radius:50%;background:var(--s2);display:flex;align-items:center;justify-content:center;font-size:0.68rem;font-weight:700;color:var(--t2)">${i+1}</div>
+      <div class="av av-sm" style="background:${ac(d.from)}">${d.from[0]}</div>
+      <div style="flex:1;font-size:0.86rem">
+        <span style="color:${ac(d.from)};font-weight:600">${d.from}</span>
+        <span style="color:var(--t3)"> → </span>
+        <span style="color:${ac(d.to)};font-weight:600">${d.to}</span>
+      </div>
+      <div class="da neg">${fm(d.amount)} €</div>
+    </div>`).join('');
+    if(settled.length){
+      html+=`<div style="font-size:0.73rem;color:var(--t2);font-weight:600;letter-spacing:0.06em;text-transform:uppercase;padding:8px 4px 4px;margin-top:4px">✅ Погашённые долги</div>`;
+      html+=[...settled].reverse().map(sd=>`
+        <div class="dr" style="opacity:0.5">
+          <div class="av av-sm" style="background:${ac(sd.from)}">${sd.from[0]}</div>
+          <div style="flex:1;font-size:0.84rem;text-decoration:line-through;color:var(--t2)">
+            <span style="color:${ac(sd.from)};font-weight:600">${sd.from}</span>
+            <span> → </span>
+            <span style="color:${ac(sd.to)};font-weight:600">${sd.to}</span>
+          </div>
+          <div style="font-family:var(--mono);font-size:0.86rem;text-decoration:line-through;color:var(--t3)">${fm(sd.amount)} €</div>
+        </div>`).join('');
+    }
+    el.innerHTML=html;
+  }
+  lucide.createIcons()
+}
+
+function settleDebt(from, to, amount){
+  if(!S.settledDebts)S.settledDebts=[];
+  S.settledDebts.push({id:uid(),from,to,amount,date:today()});
+  save();renderBalances();renderDash();
+  toast('✅ Долг погашен: '+from+' → '+to+' '+fm(amount)+' €')
+}
+function unsettle(id){
+  S.settledDebts=(S.settledDebts||[]).filter(d=>d.id!==id);
+  save();renderBalances();renderDash();
+  toast('↩ Погашение отменено')
+}
+
+// Detailed debt breakdown — what expenses contributed to this debt
+function showDebtDetail(fromName, toName, totalAmt){
+  // Gather all expenses where fromName participated (owes) and toName paid, or vice versa
+  const lines=[];
+  S.expenses.forEach(e=>{
+    const ps=perShare(e);
+    // fromName owes toName: toName paid AND fromName is participant
+    if(e.paidBy===toName && e.participants.includes(fromName)){
+      const u=units(fromName);
+      const share=ps*u;
+      lines.push({type:'owes',exp:e,share});
+    }
+    // toName owes fromName (negative): fromName paid AND toName is participant
+    if(e.paidBy===fromName && e.participants.includes(toName)){
+      const u=units(toName);
+      const share=ps*u;
+      lines.push({type:'owed',exp:e,share});
+    }
+  });
+
+  const html=`
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px">
+      <div>
+        <div style="font-weight:700;font-size:1.1rem">Расчёт долга</div>
+        <div style="font-size:0.82rem;color:var(--t2);margin-top:3px">
+          <span style="color:${ac(fromName)};font-weight:600">${fromName}</span>
+          <span> ${owes(fromName)} </span>
+          <span style="color:${ac(toName)};font-weight:600">${toName}</span>
+        </div>
+      </div>
+      <button class="btn btn-g btn-sm btn-ic" onclick="closeModal('m-debt-detail')"><i data-lucide="x" style="width:15px;height:15px"></i></button>
+    </div>
+    <div class="hero" style="padding:16px;text-align:left;margin-bottom:14px">
+      <div style="font-size:0.76rem;color:var(--t2);margin-bottom:4px">Итоговая сумма</div>
+      <div style="font-size:2rem;font-weight:700;font-family:var(--mono);color:var(--red)">${fm(totalAmt)} €</div>
+    </div>
+    <div style="font-size:0.76rem;color:var(--t2);font-weight:600;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">Учтённые расходы</div>
+    <div style="display:flex;flex-direction:column;gap:7px">
+      ${lines.map(l=>`
+        <div style="padding:11px 13px;background:var(--s1);border:1px solid var(--b1);border-radius:var(--rsm)">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">
+            <div style="font-weight:600;font-size:0.88rem">${l.exp.name}</div>
+            <div style="font-family:var(--mono);font-weight:700;font-size:0.9rem;color:${l.type==='owes'?'var(--red)':'var(--green)'}">${l.type==='owes'?'-':'+'}${fm(l.share)} €</div>
+          </div>
+          <div style="font-size:0.75rem;color:var(--t2);display:flex;gap:8px;flex-wrap:wrap">
+            <span>${l.exp.date?fdate(l.exp.date):''}</span>
+            <span>Платил: <span style="color:${ac(l.exp.paidBy)};font-weight:500">${l.exp.paidBy}</span></span>
+            <span>Всего: ${fm(l.exp.amount)} €</span>
+            <span>${l.exp.participants.length} уч.</span>
+          </div>
+          ${l.type==='owes'
+            ?`<div style="font-size:0.73rem;color:var(--t3);margin-top:4px">${fromName} участвовал в расходе — доля: ${fm(l.share)} €</div>`
+            :`<div style="font-size:0.73rem;color:var(--t3);margin-top:4px">${fromName} оплатил за ${toName} — доля ${toName}: ${fm(l.share)} €</div>`
+          }
+        </div>`).join('')}
+    </div>
+    ${!lines.length?`<div class="emp" style="padding:20px"><div class="emp-t">Нет прямых операций</div><div class="emp-s">Долг возник после оптимизации расчётов</div></div>`:''}
+  `;
+  document.getElementById('m-debt-detail-content').innerHTML=html;
+  openModal('m-debt-detail');lucide.createIcons()
+}
+
+function showPersonDetail(name){
+  const paid=calcPaid();const bal=calcBal();const net=bal[name]||0;
+  const myExp=S.expenses.filter(e=>e.participants.includes(name)||e.paidBy===name);
+  const html=`
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px">
+      <div style="display:flex;align-items:center;gap:11px">
+        <div class="av av-lg" style="background:${ac(name)}">${name[0]}</div>
+        <div><div style="font-weight:700;font-size:1.1rem;color:${ac(name)}">${name}</div><div style="font-size:0.76rem;color:var(--t2)">Баланс участника</div></div>
+      </div>
+      <button class="btn btn-g btn-sm btn-ic" onclick="closeModal('m-debt-detail')"><i data-lucide="x" style="width:15px;height:15px"></i></button>
+    </div>
+    <div class="g2" style="margin-bottom:14px">
+      <div class="sbox"><div class="sv" style="color:var(--green)">${fm(paid[name]||0)} €</div><div class="sl">Оплатил</div></div>
+      <div class="sbox"><div class="sv" style="color:${net>=0?'var(--green)':'var(--red)'}">${net>=0?'+':''}${fm(net)} €</div><div class="sl">Баланс</div></div>
+    </div>
+    <div style="font-size:0.76rem;color:var(--t2);font-weight:600;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">Все связанные расходы</div>
+    <div style="display:flex;flex-direction:column;gap:7px">
+      ${myExp.map(e=>{
+        const ps=perShare(e);const u=units(name);
+        const share=e.participants.includes(name)?ps*u:0;
+        const paid_=e.paidBy===name?e.amount:0;
+        const net_=paid_-share;
+        return `<div style="padding:11px 13px;background:var(--s1);border:1px solid var(--b1);border-radius:var(--rsm)">
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+            <div style="font-weight:600;font-size:0.86rem">${e.name}</div>
+            <div style="font-family:var(--mono);font-weight:700;font-size:0.86rem;color:${net_>=0?'var(--green)':'var(--red)'}">${net_>=0?'+':''}${fm(net_)} €</div>
+          </div>
+          <div style="font-size:0.73rem;color:var(--t2);display:flex;gap:7px;flex-wrap:wrap">
+            ${e.date?`<span>${fdate(e.date)}</span>`:''}
+            ${e.paidBy===name?`<span style="color:var(--green)">Оплатил: ${fm(e.amount)} €</span>`:''}
+            ${e.participants.includes(name)?`<span>Доля: ${fm(share)} €</span>`:''}
+          </div>
+        </div>`;
+      }).join('')}
+    </div>
+  `;
+  document.getElementById('m-debt-detail-content').innerHTML=html;
+  openModal('m-debt-detail');lucide.createIcons()
+}
+
+// =======================================================
+// TREASURY
+// =======================================================
+function calcTreasuryStats(){
+  const stats={};
+  S.members.forEach(m=>stats[m.name]={contributed:0,spent:0,remaining:0});
+  // Sum contributions per member
+  (S.treasury.contributions||[]).forEach(c=>{
+    if(stats[c.member]!==undefined)stats[c.member].contributed+=c.amount;
+  });
+  // Sum spending per member from treasury expenses (split evenly among participants)
+  S.expenses.filter(e=>e.fromTreasury).forEach(e=>{
+    const pts=e.participants&&e.participants.length>0?e.participants:S.members.map(m=>m.name);
+    const share=e.amount/pts.length;
+    pts.forEach(p=>{if(stats[p]!==undefined)stats[p].spent+=share;});
+  });
+  Object.values(stats).forEach(s=>s.remaining=s.contributed-s.spent);
+  return stats;
+}
+
+function renderTreasury(){
+  const rem=Math.max(0,S.treasury.total-S.treasury.spent);
+  document.getElementById('cash-bal').textContent=fm(rem);
+  document.getElementById('cash-spent').textContent=fm(S.treasury.spent);
+  document.getElementById('cash-total').textContent=fm(S.treasury.total);
+  const pct=S.treasury.total>0?Math.min(100,(1-rem/S.treasury.total)*100):0;
+  document.getElementById('cash-prog').style.width=pct+'%';
+  const editBtn=document.getElementById('cash-edit-btn');
+  if(editBtn)editBtn.style.display=S.isAdmin&&(S.treasury.contributions||[]).length?'':'none';
+
+  // Per-person breakdown
+  const stats=calcTreasuryStats();
+  const brkSec=document.getElementById('cash-breakdown-sec');
+  const brkEl=document.getElementById('cash-breakdown');
+  const hasContrib=Object.values(stats).some(s=>s.contributed>0);
+  if(brkSec)brkSec.style.display=hasContrib?'flex':'none';
+  if(brkEl&&hasContrib){
+    brkEl.innerHTML=S.members.map(m=>{
+      const st=stats[m.name]||{contributed:0,spent:0,remaining:0};
+      if(st.contributed<=0)return '';
+      const usedPct=st.contributed>0?Math.min(100,(st.spent/st.contributed)*100):0;
+      return `<div style="padding:12px 14px;background:var(--s1);border:1px solid var(--b1);border-radius:var(--rsm)">
+        <div style="display:flex;align-items:center;gap:9px;margin-bottom:8px">
+          <div class="av av-sm" style="background:${ac(m.name)}">${m.name[0]}</div>
+          <span style="font-weight:600;color:${ac(m.name)};font-size:0.88rem;flex:1">${m.name}</span>
+          <span style="font-family:var(--mono);font-weight:700;font-size:0.95rem;color:${st.remaining>=0?'var(--green)':'var(--red)'}">
+            ${fm(st.remaining)} €
+          </span>
+        </div>
+        <div class="pb"><div class="pf" style="width:${usedPct}%;background:${usedPct>80?'var(--red)':'var(--amber)'}"></div></div>
+        <div style="display:flex;justify-content:space-between;margin-top:4px;font-size:0.71rem;color:var(--t3)">
+          <span>Внесено: ${fm(st.contributed)} €</span>
+          <span>Потрачено: ${fm(st.spent)} €</span>
+        </div>
+      </div>`;
+    }).filter(Boolean).join('');
+  }
+
+  // Holder section
+  const holderSec=document.getElementById('cash-holder-sec');
+  const holderBtn=document.getElementById('cash-holder-btn');
+  if(holderSec){holderSec.style.display=(S.treasury.contributions||[]).length?'flex':'none';}
+  if(holderBtn){
+    const h=S.treasury.holder;
+    holderBtn.innerHTML=h
+      ?`<span style="width:8px;height:8px;border-radius:50%;background:${ac(h)};display:inline-block;margin-right:5px;flex-shrink:0"></span><span style="color:${ac(h)};font-weight:600">${h}</span>`
+      :'Не указано';
+  }
+
+  // Contribution history — aggregate per member
+  const cSec=document.getElementById('cash-contrib-sec');
+  const contribs=S.treasury.contributions||[];
+  if(cSec)cSec.style.display=contribs.length?'flex':'none';
+  if(contribs.length){
+    // Aggregate by member
+    const byMember={};
+    contribs.forEach((c,idx)=>{
+      if(!byMember[c.member])byMember[c.member]={total:0,lastDate:'',items:[]};
+      byMember[c.member].total+=c.amount;
+      if((c.date||'')>byMember[c.member].lastDate)byMember[c.member].lastDate=c.date||'';
+      byMember[c.member].items.push({...c,origIdx:idx});
+    });
+    const sumEl=document.getElementById('cash-contrib-summary');
+    if(sumEl){
+      sumEl.innerHTML=Object.entries(byMember).map(([name,data])=>`
+        <div style="display:flex;align-items:center;gap:9px;padding:9px 11px;background:var(--s1);border:1px solid var(--b1);border-radius:var(--rsm)">
+          <div class="av av-sm" style="background:${ac(name)}">${name[0]}</div>
+          <div style="flex:1">
+            <div style="font-size:0.86rem;color:${ac(name)};font-weight:600">${data.items.length>1?`${data.items.length} взноса`:'Взнос'}</div>
+            ${data.lastDate?`<div style="font-size:0.71rem;color:var(--t3)">${fdate(data.lastDate)}</div>`:''}
+          </div>
+          <div style="font-family:var(--mono);font-weight:700;color:var(--green)">+${fm(data.total)} €</div>
+        </div>`).join('');
+    }
+    // Detailed per-contribution list (collapsible)
+    const detEl=document.getElementById('cash-contrib-detail');
+    if(detEl){
+      detEl.innerHTML=[...contribs].map((c,idx)=>{
+        const canDel=S.isAdmin||(c.member===S.me);
+        return `<div style="display:flex;align-items:center;gap:8px;padding:7px 11px;background:var(--s1);border:1px solid var(--b1);border-radius:var(--rsm);font-size:0.83rem">
+          <div class="av av-sm" style="background:${ac(c.member)}">${c.member[0]}</div>
+          <div style="flex:1;color:${ac(c.member)};font-weight:500">${c.member}</div>
+          <div style="color:var(--t3);font-size:0.71rem">${fdate(c.date)}</div>
+          <div style="font-family:var(--mono);font-weight:700;color:var(--green)">+${fm(c.amount)} €</div>
+          ${canDel?`<button class="btn btn-g btn-sm btn-ic" onclick="deleteContrib(${idx})" title="Удалить"><i data-lucide="trash-2" style="width:11px;height:11px"></i></button>`:''}
+        </div>`;
+      }).reverse().join('');
+      lucide.createIcons();
+    }
+  }
+
+  const tExp=S.expenses.filter(e=>e.fromTreasury);
+  document.getElementById('cash-exp').innerHTML=tExp.length
+    ?[...tExp].reverse().map(e=>expRow(e)).join('')
+    :'<div class="emp" style="padding:24px"><div class="emp-ic">💳</div><div class="emp-t">Нет списаний</div></div>';
+  lucide.createIcons()
+}
+function openAddCash(){
+  document.getElementById('ac-amt').value='';
+  const el=document.getElementById('ac-contributor');
+  if(el){
+    el.innerHTML=S.members.map(m=>
+      `<div class="wp ${m.name===S.me?'on':''}" data-contributor="${m.name}" onclick="selContributor(this,'${m.name}')">
+        <div class="av av-sm" style="background:${ac(m.name)}">${m.name[0]}</div>
+        <span style="color:${ac(m.name)};font-weight:600">${m.name}</span>
+      </div>`).join('');
+  }
+  openModal('m-add-cash');lucide.createIcons()
+}
+function selContributor(el,name){
+  document.querySelectorAll('[data-contributor]').forEach(b=>b.classList.remove('on'));
+  el.classList.add('on');
+}
+function saveCash(){
+  const a=parseFloat(document.getElementById('ac-amt').value);
+  if(!a||a<=0){toast('⚠️ Введите сумму');return}
+  const cEl=document.querySelector('[data-contributor].on');
+  const contributor=cEl?cEl.dataset.contributor:S.me;
+  if(!S.treasury.contributions)S.treasury.contributions=[];
+  S.treasury.contributions.push({member:contributor,amount:a,date:today()});
+  S.treasury.total+=a;
+  save();closeModal('m-add-cash');renderTreasury();renderDash();renderAEModal();
+  toast('✅ '+contributor+' внёс '+fm(a)+' € в кассу')
+}
+function toggleContribList(){
+  const det=document.getElementById('cash-contrib-detail');
+  const chev=document.getElementById('chev-contrib');
+  if(!det)return;
+  const open=det.style.display!=='none';
+  det.style.display=open?'none':'flex';
+  if(chev)chev.style.transform=open?'':'rotate(180deg)';
+}
+function openHolderPicker(){
+  const current=S.treasury.holder;
+  const opts=S.members.map(m=>`<div class="wp ${m.name===current?'on':''}" data-holder="${m.name}" onclick="setHolder('${m.name}',this)" style="cursor:pointer">
+    <div class="av av-sm" style="background:${ac(m.name)}">${m.name[0]}</div>
+    <span style="color:${ac(m.name)};font-weight:600">${m.name}</span>
+  </div>`).join('');
+  document.getElementById('m-debt-detail-content').innerHTML=`
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <div class="mdl-title">💼 Касса у кого?</div>
+      <button class="btn btn-g btn-sm btn-ic" onclick="closeModal('m-debt-detail')"><i data-lucide="x" style="width:14px;height:14px"></i></button>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:7px;margin-bottom:12px" id="holder-picker">${opts}</div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-p btn-fw" onclick="saveHolder()">Сохранить</button>
+      ${current?`<button class="btn btn-g btn-sm" onclick="clearHolder()">Сбросить</button>`:''}
+    </div>`;
+  openModal('m-debt-detail');lucide.createIcons();
+}
+function setHolder(name,el){
+  document.querySelectorAll('#holder-picker [data-holder]').forEach(b=>b.classList.remove('on'));
+  el.classList.add('on');
+}
+function saveHolder(){
+  const sel=document.querySelector('#holder-picker [data-holder].on');
+  S.treasury.holder=sel?sel.dataset.holder:null;
+  save();closeModal('m-debt-detail');renderTreasury();
+  toast('✅ Касса у: '+(S.treasury.holder||'?'));
+}
+function clearHolder(){
+  S.treasury.holder=null;
+  save();closeModal('m-debt-detail');renderTreasury();
+  toast('ℹ️ Держатель кассы сброшен');
+}
+
+// =======================================================
+// MY ORDER (Мой заказ)
+// =======================================================
+let _moItems=[];// parsed items for current order
+
+function openMyOrder(){
+  _moItems=[];
+  document.getElementById('mo-txt').value='';
+  document.getElementById('mo-result').style.display='none';
+  document.getElementById('mo-loading').style.display='none';
+  // Participant selector
+  const pEl=document.getElementById('mo-participant');
+  pEl.innerHTML=S.members.map(m=>{
+    const canSelect=S.isAdmin||m.name===S.me;
+    return `<div class="wp ${m.name===S.me?'on':''}" data-mo-person="${m.name}"
+      ${canSelect?`onclick="selMoPerson(this,'${m.name}')"`:''}
+      style="${!canSelect?'opacity:0.38;cursor:default;pointer-events:none':''}">
+      <div class="av av-sm" style="background:${ac(m.name)}">${m.name[0]}</div>
+      <span style="color:${ac(m.name)};font-weight:600">${m.name}</span>
+    </div>`;
+  }).join('');
+  openModal('m-my-order');lucide.createIcons();
+}
+
+function selMoPerson(el,name){
+  document.querySelectorAll('[data-mo-person]').forEach(b=>b.classList.remove('on'));
+  el.classList.add('on');
+}
+
+function selMoPayer(el,name){
+  document.querySelectorAll('[data-mo-payer]').forEach(b=>b.classList.remove('on'));
+  el.classList.add('on');
+}
+
+async function parseMyOrder(){
+  const t=document.getElementById('mo-txt').value.trim();
+  if(!t){toast('⚠️ Введите текст заказа');return}
+  const personEl=document.querySelector('[data-mo-person].on');
+  const person=personEl?personEl.dataset.moPerson:S.me;
+
+  document.getElementById('mo-loading').style.display='flex';
+  document.getElementById('mo-result').style.display='none';
+
+  let items=[];
+  {
+    try{
+      const r=await fetch(`${API_BASE}/api/anthropic`,{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({model:'claude-3-5-haiku-20241022',max_tokens:800,messages:[{role:'user',content:
+          `Parse this order text. Return ONLY valid JSON: {"items":[{"name":"item name","price":0.00,"qty":1},...]}
+Rules:
+- price = TOTAL for that line (qty*unitPrice)
+- "2 пива по 4€" → {name:"Пиво",qty:2,price:8.00}
+- "салат за 7.50" → {name:"Салат",qty:1,price:7.50}
+- "3 воды - 1.5€" → {name:"Вода",qty:3,price:4.50}
+- comma as decimal: "7,50" = 7.50
+- Capitalize names
+Text:\n${t}`}]})
+      });
+      const d=await r.json();
+      if(d.error)throw new Error(d.error.message);
+      const txt=(d.content?.[0]?.text||'').replace(/```json|```/g,'').trim();
+      items=(JSON.parse(txt).items||[]).map(it=>({name:it.name,price:parseFloat(it.price)||0,qty:parseInt(it.qty)||1}));
+    }catch(e){console.warn('[AI order parse]',e)}
+  }
+  if(!items.length){
+    items=parseReceiptText(t);
+  }
+  document.getElementById('mo-loading').style.display='none';
+  if(!items.length){toast('⚠️ Не удалось распознать. Проверьте формат.');return}
+
+  _moItems=items;
+  const total=items.reduce((s,it)=>s+it.price,0);
+
+  // Render items
+  document.getElementById('mo-items-list').innerHTML=items.map((it,i)=>`
+    <div style="display:flex;align-items:center;gap:9px;padding:8px 11px;background:var(--s1);border:1px solid var(--b1);border-radius:var(--rsm)">
+      <div style="flex:1;font-size:0.86rem">${it.name}${it.qty>1?` <span style="color:var(--t3);font-size:0.75rem">×${it.qty}</span>`:''}</div>
+      <div style="font-family:var(--mono);font-weight:600;font-size:0.88rem">${fm(it.price)} €</div>
+      <button onclick="removeMoItem(${i})" style="border:none;background:none;color:var(--t3);cursor:pointer;padding:2px"><i data-lucide="x" style="width:12px;height:12px"></i></button>
+    </div>`).join('');
+  document.getElementById('mo-total').textContent=fm(total)+' €';
+  document.getElementById('mo-exp-name').value='Заказ — '+person;
+
+  // Payer selector
+  const remaining=S.treasury.total-S.treasury.spent;
+  const treasury=remaining>0?`<div class="wp" data-mo-payer="_treasury" onclick="selMoPayer(this,'_treasury')" style="border-color:rgba(34,197,94,0.35)">
+    <span>💰</span><span style="color:var(--green);font-weight:600;font-size:0.8rem">Касса (${fm(remaining)} €)</span>
+  </div>`:'';
+  document.getElementById('mo-payer').innerHTML=S.members.map(m=>{
+    const canSelect=S.isAdmin||m.name===S.me;
+    return `<div class="wp ${m.name===S.me?'on':''}" data-mo-payer="${m.name}"
+      ${canSelect?`onclick="selMoPayer(this,'${m.name}')"`:''}
+      style="${!canSelect?'opacity:0.38;cursor:default;pointer-events:none':''}">
+      <div class="av av-sm" style="background:${ac(m.name)}">${m.name[0]}</div>
+      <span style="color:${ac(m.name)};font-weight:600">${m.name}</span>
+    </div>`;
+  }).join('')+treasury;
+
+  document.getElementById('mo-result').style.display='flex';
+  lucide.createIcons();
+}
+
+function removeMoItem(idx){
+  _moItems.splice(idx,1);
+  if(!_moItems.length){document.getElementById('mo-result').style.display='none';return}
+  const total=_moItems.reduce((s,it)=>s+it.price,0);
+  document.getElementById('mo-total').textContent=fm(total)+' €';
+  document.getElementById('mo-items-list').innerHTML=_moItems.map((it,i)=>`
+    <div style="display:flex;align-items:center;gap:9px;padding:8px 11px;background:var(--s1);border:1px solid var(--b1);border-radius:var(--rsm)">
+      <div style="flex:1;font-size:0.86rem">${it.name}${it.qty>1?` <span style="color:var(--t3);font-size:0.75rem">×${it.qty}</span>`:''}</div>
+      <div style="font-family:var(--mono);font-weight:600;font-size:0.88rem">${fm(it.price)} €</div>
+      <button onclick="removeMoItem(${i})" style="border:none;background:none;color:var(--t3);cursor:pointer;padding:2px"><i data-lucide="x" style="width:12px;height:12px"></i></button>
+    </div>`).join('');
+  lucide.createIcons();
+}
+
+function saveMyOrder(){
+  if(!_moItems.length){toast('⚠️ Нет позиций');return}
+  const personEl=document.querySelector('[data-mo-person].on');
+  const person=personEl?personEl.dataset.moPerson:S.me;
+  const payerEl=document.querySelector('[data-mo-payer].on');
+  const payer=payerEl?payerEl.dataset.moPayer:S.me;
+  const name=document.getElementById('mo-exp-name').value.trim()||('Заказ — '+person);
+  const total=_moItems.reduce((s,it)=>s+it.price,0);
+  if(total<=0){toast('⚠️ Сумма 0');return}
+  const fromTreasury=payer==='_treasury';
+  const exp={
+    id:uid(),name,amount:total,comment:'',date:today(),
+    paidBy:fromTreasury?'_treasury':payer,
+    participants:[person],
+    fromTreasury,
+    items:_moItems.map(it=>({name:it.name,price:it.price,qty:it.qty||1,assignedTo:person}))
+  };
+  if(fromTreasury)S.treasury.spent+=total;
+  S.expenses.push(exp);
+  save();closeModal('m-my-order');renderAll();
+  toast('✅ Заказ '+person+' сохранён: '+fm(total)+' €');
+}
+
+function openEditCashList(){
+  renderEditCashModal();
+  openModal('m-edit-cash');lucide.createIcons();
+}
+function renderEditCashModal(){
+  const contribs=S.treasury.contributions||[];
+  const el=document.getElementById('ec-list');
+  if(!el)return;
+  if(!contribs.length){el.innerHTML='<div class="emp" style="padding:18px"><div class="emp-t">Нет взносов</div></div>';return;}
+  el.innerHTML=contribs.map((c,i)=>`
+    <div style="display:flex;align-items:center;gap:8px;background:var(--s1);border:1px solid var(--b1);border-radius:var(--rsm);padding:10px 11px">
+      <div class="av av-sm" style="background:${ac(c.member)}">${c.member[0]}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:0.84rem;font-weight:600;color:${ac(c.member)}">${c.member}</div>
+        <div style="font-size:0.71rem;color:var(--t3)">${fdate(c.date)}</div>
+      </div>
+      <input class="inp" type="number" id="ec-amt-${i}" value="${c.amount}" min="0.01" step="0.01"
+        style="width:90px;text-align:right;font-family:var(--mono);font-weight:700;padding:5px 8px;font-size:0.9rem">
+      <button class="btn btn-g btn-sm btn-ic" onclick="deleteContrib(${i})" style="color:var(--red)"><i data-lucide="trash-2" style="width:13px;height:13px"></i></button>
+    </div>`).join('');
+  lucide.createIcons();
+}
+function deleteContrib(idx){
+  if(!confirm('Удалить этот взнос?'))return;
+  S.treasury.contributions.splice(idx,1);
+  S.treasury.total=S.treasury.contributions.reduce((s,c)=>s+c.amount,0);
+  save();renderTreasury();renderDash();renderAEModal();
+  renderEditCashModal();
+  toast('Взнос удалён');
+}
+function saveEditedContribs(){
+  const contribs=S.treasury.contributions||[];
+  let changed=false;
+  contribs.forEach((c,i)=>{
+    const inp=document.getElementById('ec-amt-'+i);
+    if(!inp)return;
+    const v=parseFloat(inp.value);
+    if(!isNaN(v)&&v>0&&v!==c.amount){c.amount=v;changed=true;}
+  });
+  S.treasury.total=contribs.reduce((s,c)=>s+c.amount,0);
+  save();closeModal('m-edit-cash');renderTreasury();renderDash();renderAEModal();
+  toast(changed?'✅ Касса обновлена':'Изменений нет');
+}
+
+// =======================================================
+// SETTINGS
+// =======================================================
+function renderSettings(){
+  const isAdminUser=S.isAdmin;
+  document.getElementById('set-trip-form').style.display=isAdminUser?'':'none';
+  document.getElementById('set-add-mbr-btn').style.display=isAdminUser?'':'none';
+  const grpBtns=document.getElementById('set-grp-btns');
+  if(grpBtns)grpBtns.style.display=isAdminUser?'':'none';
+  const delBtn=document.getElementById('set-delete-btn');
+  if(delBtn)delBtn.style.display=isAdminUser?'':'none';
+  const leaveBtn=document.getElementById('set-leave-btn');
+  if(leaveBtn)leaveBtn.style.display=isAdminUser?'none':'';
+  document.getElementById('set-name').value=S.trip?.name||'';
+  document.getElementById('set-dest').value=S.trip?.dest||'';
+  // Theme button state
+  const isLight=document.documentElement.getAttribute('data-theme')==='light';
+  const tBtn=document.getElementById('set-theme-btn');
+  if(tBtn)tBtn.innerHTML=isLight
+    ?'<i data-lucide="moon" style="width:16px;height:16px"></i> Тёмная тема'
+    :'<i data-lucide="sun" style="width:16px;height:16px"></i> Светлая тема';
+  renderSettingMembers();
+  renderSettingGroups();
+  renderArchive();
+  lucide.createIcons();
+}
+
+function renderArchive(){
+  const sec=document.getElementById('set-archive-sec');
+  if(!sec)return;
+  const receipts=S.receipts||[];
+  sec.style.display=receipts.length?'flex':'none';
+  const cntEl=document.getElementById('set-archive-cnt');
+  if(cntEl)cntEl.textContent=receipts.length+' чеков';
+  const el=document.getElementById('set-archive');
+  if(!el)return;
+  el.innerHTML=[...receipts].reverse().map(r=>{
+    const exp=S.expenses.find(e=>e.id===r.expenseId);
+    return `<div class="er" onclick="${exp?`showExpDetail('${r.expenseId}')`:''}">
+      <div style="width:38px;height:38px;border-radius:var(--rxs);background:var(--s2);display:flex;align-items:center;justify-content:center;font-size:1.2rem;flex-shrink:0">🧾</div>
+      <div class="ei">
+        <div class="en">${r.merchant}</div>
+        <div class="em">
+          <span style="color:var(--t3)">${fdate(r.date)}</span>
+          <span>${r.itemCount} позиций</span>
+        </div>
+      </div>
+      <div style="text-align:right;flex-shrink:0">
+        <div style="font-family:var(--mono);font-weight:700;font-size:0.95rem">${fm(r.amount)}</div>
+        <div style="font-size:0.68rem;color:var(--t2)">EUR</div>
+      </div>
+    </div>`;
+  }).join('');
+  lucide.createIcons();
+}
+
+function renderSettingMembers(){
+  const el=document.getElementById('set-members');
+  el.innerHTML=S.members.map(m=>`
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 13px;background:var(--s1);border:1px solid var(--b1);border-radius:var(--rsm)">
+      <div class="av av-md" style="background:${ac(m.name)}">${m.name[0]}</div>
+      <div style="flex:1">
+        <span style="font-weight:600;color:${ac(m.name)}">${m.name}</span>
+        <span style="font-size:0.72rem;color:var(--t2);margin-left:6px">${m.gender==='f'?'Ж':'М'}</span>
+        ${isAdm(m.name)?'<span style="font-size:0.6rem;background:rgba(108,99,255,0.2);color:var(--ac2);padding:2px 6px;border-radius:4px;font-weight:700;margin-left:5px">Admin</span>':''}
+        ${m.name===S.me?'<span style="font-size:0.65rem;background:var(--aglow);color:var(--ac2);padding:2px 6px;border-radius:4px;font-weight:600;margin-left:5px">вы</span>':''}
+        ${S.groups.find(g=>g.members.includes(m.name))?`<span style="font-size:0.65rem;background:rgba(139,127,212,0.18);color:#8b7fd4;padding:2px 6px;border-radius:4px;font-weight:600;margin-left:5px">${S.groups.find(g=>g.members.includes(m.name)).type==='couple'?'♥ пара':'👨‍👩‍👧 семья'}</span>`:''}
+      </div>
+      <div style="display:flex;gap:5px">
+        ${(S.isAdmin||m.name===S.me)?`<button class="btn btn-g btn-sm btn-ic" title="Изменить цвет" onclick="openColorPicker('${m.name}')" style="padding:7px;position:relative">
+          <span style="display:block;width:13px;height:13px;border-radius:50%;background:${ac(m.name)};border:1px solid var(--b2)"></span>
+        </button>`:''}
+        ${S.isAdmin?`${m.name!==S.me?`<button class="btn btn-g btn-sm btn-ic" title="${isAdm(m.name)?'Снять права Админа':'Сделать Админом'}"
+          onclick="toggleMemberAdmin('${m.name}')" style="${isAdm(m.name)?'color:var(--amber)':''}">
+          <i data-lucide="${isAdm(m.name)?'shield-off':'shield-check'}" style="width:13px;height:13px"></i>
+        </button>`:''}
+        <button class="btn btn-g btn-sm btn-ic" title="Переименовать" onclick="openRenameMember('${m.name}')"><i data-lucide="pencil" style="width:13px;height:13px"></i></button>
+        ${m.name!==S.me?`<button class="btn btn-g btn-sm btn-ic" title="Удалить" onclick="removeMember('${m.name}')"><i data-lucide="trash-2" style="width:13px;height:13px"></i></button>`:''}
+      `:''}
+      </div>
+    </div>`).join('');
+
+  const sel=document.getElementById('set-member-sel');
+  if(sel){
+    sel.innerHTML=S.members.map(m=>{
+      const inGrp=S.groups.find(g=>g.members.includes(m.name));
+      return `<div class="member-sel" data-ms="${m.name}" onclick="toggleMSel(this,'${m.name}')">
+        <div class="chk"></div>
+        <div class="av av-sm" style="background:${ac(m.name)}">${m.name[0]}</div>
+        <span style="color:${ac(m.name)};font-weight:500">${m.name}</span>
+        ${inGrp?`<span style="font-size:0.65rem;color:var(--t3)">(в группе)</span>`:''}
+      </div>`
+    }).join('')
+  }
+  lucide.createIcons()
+}
+
+function openColorPicker(name){
+  if(!S.isAdmin&&name!==S.me){toast('❌ Можно менять только свой цвет');return}
+  // Use a palette of colors to pick from
+  const palette=['#818cf8','#34d399','#fb7185','#fbbf24','#38bdf8','#e879f9','#f97316','#4ade80','#f472b6','#a78bfa','#22d3a0','#ef4444','#3b82f6','#eab308','#ec4899','#8b5cf6','#06b6d4','#84cc16'];
+  const current=S.memberColors&&S.memberColors[name];
+  document.getElementById('m-debt-detail-content').innerHTML=`
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <div class="mdl-title">🎨 Цвет: ${name}</div>
+      <button class="btn btn-g btn-sm btn-ic" onclick="closeModal('m-debt-detail')"><i data-lucide="x" style="width:14px;height:14px"></i></button>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px" id="cp-swatches">
+      ${palette.map(c=>`<div onclick="pickColor('${name}','${c}')" style="width:38px;height:38px;border-radius:50%;background:${c};cursor:pointer;border:3px solid ${c===current?'#fff':'transparent'};box-shadow:${c===current?'0 0 0 2px var(--accent)':'none'};transition:all 0.15s" data-clr="${c}"></div>`).join('')}
+    </div>
+    <div class="iw" style="margin-bottom:12px">
+      <label class="il">Произвольный цвет</label>
+      <input type="color" class="inp" id="cp-custom" value="${current||ac(name)}" style="height:44px;padding:4px;cursor:pointer" oninput="highlightSwatch(this.value)">
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-p btn-fw" onclick="applyColor('${name}')">Применить</button>
+      ${current?`<button class="btn btn-g btn-sm" onclick="resetColor('${name}')">Сбросить</button>`:''}
+    </div>`;
+  openModal('m-debt-detail');lucide.createIcons();
+}
+function pickColor(name,color){
+  document.getElementById('cp-custom').value=color;
+  document.querySelectorAll('#cp-swatches div').forEach(d=>{
+    const sel=d.dataset.clr===color;
+    d.style.border=sel?'3px solid #fff':'3px solid transparent';
+    d.style.boxShadow=sel?'0 0 0 2px var(--accent)':'none';
+  });
+}
+function highlightSwatch(color){
+  document.querySelectorAll('#cp-swatches div').forEach(d=>{
+    const sel=d.dataset.clr===color;
+    d.style.border=sel?'3px solid #fff':'3px solid transparent';
+    d.style.boxShadow=sel?'0 0 0 2px var(--accent)':'none';
+  });
+}
+function applyColor(name){
+  const c=document.getElementById('cp-custom').value;
+  if(!S.memberColors)S.memberColors={};
+  S.memberColors[name]=c;
+  save();closeModal('m-debt-detail');renderAll();
+  toast('🎨 Цвет обновлён');
+}
+function resetColor(name){
+  if(S.memberColors)delete S.memberColors[name];
+  save();closeModal('m-debt-detail');renderAll();
+  toast('🎨 Цвет сброшен');
+}
+
+function toggleMemberAdmin(name){
+  if(!S.isAdmin){toast('❌ Только Админ');return}
+  if(name===S.adminName){toast('⚠️ Нельзя снять права с создателя поездки');return}
+  if(!S.coAdmins)S.coAdmins=[];
+  if(S.coAdmins.includes(name)){
+    S.coAdmins=S.coAdmins.filter(n=>n!==name);
+    toast('🔓 Права Админа сняты: '+name);
+  } else {
+    S.coAdmins.push(name);
+    toast('🛡️ '+name+' теперь Админ');
+  }
+  save();renderSettingMembers();renderMembersList();lucide.createIcons();
+}
+
+function openRenameMember(name){
+  document.getElementById('ren-old').value=name;
+  document.getElementById('ren-new').value=name;
+  openModal('m-rename')
+}
+function saveRename(){
+  const oldName=document.getElementById('ren-old').value;
+  const newName=document.getElementById('ren-new').value.trim();
+  if(!newName){toast('⚠️ Введите имя');return}
+  if(!S.isAdmin&&oldName!==S.me){toast('❌ Можно переименовывать только себя');return}
+  if(S.members.find(m=>m.name===newName&&m.name!==oldName)){toast('⚠️ Такое имя уже есть');return}
+  // Update everywhere
+  S.members=S.members.map(m=>m.name===oldName?{...m,name:newName}:m);
+  S.groups=S.groups.map(g=>({...g,members:g.members.map(n=>n===oldName?newName:n)}));
+  S.expenses=S.expenses.map(e=>({
+    ...e,
+    paidBy:e.paidBy===oldName?newName:e.paidBy,
+    participants:e.participants.map(p=>p===oldName?newName:p),
+    items:(e.items||[]).map(it=>({...it,assignedTo:it.assignedTo===oldName?newName:it.assignedTo}))
+  }));
+  if(S.me===oldName){S.me=newName}
+  save();closeModal('m-rename');renderAll();renderSettings();
+  toast('✅ Имя обновлено: '+newName)
+}
+
+function toggleMSel(el,name){el.classList.toggle('checked')}
+function createGroup(){
+  const checked=[...document.querySelectorAll('.member-sel.checked')].map(el=>el.dataset.ms);
+  if(checked.length<2){toast('⚠️ Выберите минимум 2 участников');return}
+  // Remove existing groups of these members
+  S.groups=S.groups.filter(g=>!g.members.some(m=>checked.includes(m)));
+  const type=checked.length===2?'couple':'family';
+  const label=checked.length===2?null:prompt('Название семьи (необязательно)','Семья')||'Семья';
+  S.groups.push({id:uid(),type,members:checked,label});
+  save();renderSettings();renderAll();toast('✅ Группа создана')
+}
+
+function renderSettingGroups(){
+  const el=document.getElementById('set-groups');
+  if(!S.groups.length){el.innerHTML='<div style="color:var(--t3);font-size:0.82rem;padding:8px 0">Нет объединений</div>';return}
+  el.innerHTML=S.groups.map(g=>{
+    const icon=g.type==='couple'?'♥':'👨‍👩‍👧';
+    const lbl=g.type==='couple'?'Пара':(g.label||'Семья');
+    return `<div style="display:flex;align-items:center;gap:10px;padding:11px 13px;background:var(--s1);border:1px solid ${g.type==='couple'?'rgba(255,95,110,0.25)':'rgba(245,158,11,0.25)'};border-radius:var(--rsm)">
+      <span style="font-size:1.1rem">${icon}</span>
+      <div style="flex:1">
+        <div style="font-weight:600;font-size:0.86rem">${lbl}</div>
+        <div style="font-size:0.75rem;color:var(--t2)">${g.members.map(n=>`<span style="color:${ac(n)}">${n}</span>`).join(' + ')}</div>
+      </div>
+      ${S.isAdmin?`<button class="btn btn-g btn-sm btn-ic" onclick="removeGroup('${g.id}')"><i data-lucide="trash-2" style="width:12px;height:12px"></i></button>`:''}
+    </div>`
+  }).join('')
+}
+
+function removeGroup(gid){
+  S.groups=S.groups.filter(g=>g.id!==gid);
+  save();renderSettings();renderAll();toast('Группа удалена')
+}
+
+function removeMember(name){
+  if(!S.isAdmin){toast('❌ Только Админ');return}
+  if(!confirm(`Удалить ${name} из поездки?`))return;
+  S.members=S.members.filter(m=>m.name!==name);
+  S.groups=S.groups.map(g=>({...g,members:g.members.filter(n=>n!==name)})).filter(g=>g.members.length>1);
+  save();renderAll();renderSettings()
+}
+
+function openAddMember(){if(!S.isAdmin){toast('❌ Только Админ');return}document.getElementById('am-name').value='';openModal('m-add-mbr')}
+function saveMember(){
+  const name=document.getElementById('am-name').value.trim();
+  const gender=document.getElementById('am-gender').value;
+  if(!name){toast('⚠️ Введите имя');return}
+  if(S.members.find(m=>m.name===name)){toast('⚠️ Участник уже есть');return}
+  S.members.push({name,gender});
+  save();closeModal('m-add-mbr');renderAll();renderSettings();toast('✅ Участник добавлен')
+}
+
+function saveTripSettings(){
+  if(!S.isAdmin){toast('❌ Только Админ');return}
+  S.trip.name=document.getElementById('set-name').value.trim()||S.trip.name;
+  S.trip.dest=document.getElementById('set-dest').value.trim();
+  document.getElementById('app-trip-name').textContent=S.trip.name;
+  document.getElementById('app-trip-sub').textContent=(S.trip.dest||S.trip.id)+' · '+S.members.length+' уч.';
+  save();toast('✅ Поездка обновлена')
+}
+
+async function deleteTrip(){
+  if(!S.isAdmin){toast('❌ Только Админ');return}
+  if(!confirm(`Удалить поездку "${S.trip?.name}"? Это действие нельзя отменить.`))return;
+  const tid=S.trip.id;
+  // Удаляем локальные данные (включая токены)
+  localStorage.removeItem('sw_'+tid);
+  localStorage.removeItem('sw_last');
+  localStorage.removeItem('sw_invite_'+tid);
+  localStorage.removeItem('sw_admin_'+tid);
+  if(USE_SUPABASE){
+    try{
+      const sb=await getSupabase();
+      if(sb){
+        if(S.inviteToken&&S.adminToken){
+          // Новый безопасный путь: RPC с проверкой admin_token
+          await sb.rpc('admin_delete_trip',{
+            p_invite_token:S.inviteToken,
+            p_admin_token:S.adminToken
+          });
+        } else {
+          // Legacy: прямое удаление (старые поездки без токенов)
+          await sb.from('trips').delete().eq('id',tid);
+        }
+      }
+    }catch(e){console.warn('[SB] Delete trip error:',e)}
+  }
+  location.reload();
+}
+function newTrip(){
+  if(!confirm('Создать новую поездку? Текущая будет сохранена.'))return;
+  localStorage.removeItem('sw_last');
+  location.reload();
+}
+function leaveTrip(){
+  if(!confirm('Выйти из поездки? Вы сможете вернуться по ссылке или QR-коду.'))return;
+  localStorage.removeItem('sw_last');
+  location.reload();
+}
+
+// =======================================================
+// SCAN / RECEIPT
+// =======================================================
+function scanTab(tab,btn){
+  document.querySelectorAll('#pg-scan .tab').forEach(t=>t.classList.remove('active'));btn.classList.add('active');
+  document.getElementById('sc-receipt').style.display=tab==='receipt'?'flex':'none';
+  document.getElementById('sc-menu').style.display=tab==='menu'?'flex':'none';
+  S.scan.mode=tab;
+}
+async function handleFile(ev,m){
+  const file=ev.target.files[0];if(!file)return;
+  const prev=document.getElementById(m==='r'?'sc-prev-r':'sc-prev-m');
+  const imgEl=document.getElementById(m==='r'?'sc-img-r':'sc-img-m');
+  prev.style.display='block';imgEl.src=URL.createObjectURL(file);
+  const ld=document.getElementById(m==='r'?'sc-ld-r':'sc-ld-m');
+  ld.style.display='flex';
+  try{
+    const {b64,mt}=await toB64(file);
+    await scanAI(b64,mt,m);
+  }catch(e){ld.style.display='none';toast('❌ Ошибка. Попробуйте текст.')}
+}
+function handleDrop(ev,m){
+  ev.preventDefault();
+  const file=ev.dataTransfer.files[0];
+  if(file&&file.type.startsWith('image/')){
+    const dt=new DataTransfer();dt.items.add(file);
+    document.getElementById(m==='r'?'sc-file-r':'sc-file-m').files=dt.files;
+    handleFile({target:{files:[file]}},m);
+  }
+}
+// toB64: сжимает изображение до max 1200px через Canvas, всегда JPEG quality 0.88
+// Это критически важно для Netlify Function (лимит тела ~6МБ) и таймаута 10с.
+// Samsung S908B снимает ~50МПикс (15МБ) → после resize ~150КБ → base64 ~200КБ
+async function toB64(file,maxPx=1200){
+  return new Promise((res,rej)=>{
+    const img=new Image();
+    const objUrl=URL.createObjectURL(file);
+    img.onload=()=>{
+      URL.revokeObjectURL(objUrl);
+      const scale=Math.min(1,maxPx/Math.max(img.naturalWidth,img.naturalHeight));
+      const w=Math.round(img.naturalWidth*scale);
+      const h=Math.round(img.naturalHeight*scale);
+      const canvas=document.createElement('canvas');
+      canvas.width=w;canvas.height=h;
+      canvas.getContext('2d').drawImage(img,0,0,w,h);
+      const dataUrl=canvas.toDataURL('image/jpeg',0.88);
+      res({b64:dataUrl.split(',')[1],mt:'image/jpeg'});
+    };
+    img.onerror=()=>{URL.revokeObjectURL(objUrl);rej(new Error('Image load failed'))};
+    img.src=objUrl;
+  });
+}
+// Слова-стоп для итогов/налогов чека (многоязычные)
+const RECEIPT_SKIP=/^(итого|total|gesamt|summe|tax|ндс|mwst|ust|service|tip|trinkgeld|subtotal|zwischensumme|к оплате|сдача|change|cash|visa|master|kreditkarte|rechnung|danke|vielen|bon|umsatz|netto|brutto|rabatt|discount|coupon|void|storno)/i;
+// Проверка: строка содержит достаточно букв (не мусор от Tesseract)
+function _isGarbageLine(s){
+  const letters=s.replace(/[^a-zA-ZА-Яа-яёЁÄÖÜäöüßÀ-ž]/g,'').length;
+  const total=s.replace(/\s/g,'').length;
+  if(total<2)return true;
+  // Если меньше 20% букв — мусор (e.g. "% ke os." или "A © S O")
+  if(letters/total<0.20)return true;
+  // Если имя целиком из одиночных символов разделённых пробелами — мусор
+  const words=s.trim().split(/\s+/);
+  const singleCharWords=words.filter(w=>w.length===1).length;
+  if(words.length>=3&&singleCharWords/words.length>0.5)return true;
+  return false;
+}
+
+function parseReceiptText(raw){
+  const items=[];
+  const lines=raw.split('\n');
+  for(let line of lines){
+    let s=line.trim().replace(/\s+/g,' ').replace(/[|}{\\]/g,'');
+    if(!s||s.length<2)continue;
+    let name='',price=0,qty=1;
+    let m;
+
+    // Число: целое или дробное, запятая или точка как разделитель
+    const NUM=/\d{1,5}(?:[.,]\d{1,2})?/;
+    const numStr=s=>parseFloat(s.replace(',','.'));
+    // Формат 1: "2 пива по 4" или "2 пива по 4€"  (КОЛ-ВО ИМЯ по ЦЕНА/шт)
+    const rePo1=new RegExp(`^(\\d+)\\s+(.{2,40}?)\\s+по\\s+(${NUM.source})\\s*[€$£]?\\s*$`,'i');
+    // Формат 2: "Пиво 2 по 4€"  (ИМЯ КОЛ-ВО по ЦЕНА/шт)
+    const rePo2=new RegExp(`^(.{2,40}?)\\s+(\\d+)\\s+по\\s+(${NUM.source})\\s*[€$£]?\\s*$`,'i');
+    // Формат 3: "Пиво по 5€"  (ИМЯ по ЦЕНА — кол-во = 1)
+    const rePo3=new RegExp(`^(.{2,40}?)\\s+по\\s+(${NUM.source})\\s*[€$£]?\\s*$`,'i');
+    // Формат 4: "Name за 7,50€"
+    const reZa=new RegExp(`^(.{2,50}?)\\s+за\\s+(${NUM.source})\\s*[€$£]?\\s*$`,'i');
+    // Формат 5: тире "Name - 12.90"
+    const reDash=new RegExp(`^(.{2,60}?)\\s*[-–—]\\s*(${NUM.source})\\s*[€$£]?\\s*$`);
+    // Формат 6: "Name   12.90" (2+ пробела)
+    const reSpace=new RegExp(`^(.{2,60}?)\\s{2,}(${NUM.source})\\s*[€$£]?\\s*$`);
+    // Формат 7: "Name 12.90" или "Name 5" — последнее слово это число
+    const reLast=new RegExp(`^(.{2,60}?)\\s+(${NUM.source})\\s*[€$£]?\\s*$`);
+
+    if((m=s.match(rePo1))){
+      qty=parseInt(m[1]);name=m[2].trim();price=numStr(m[3])*qty;
+    } else if((m=s.match(rePo2))){
+      name=m[1].trim();qty=parseInt(m[2]);price=numStr(m[3])*qty;
+    } else if((m=s.match(rePo3))){
+      name=m[1].trim();qty=1;price=numStr(m[2]);
+    } else if((m=s.match(reZa))){
+      name=m[1].trim();price=numStr(m[2]);qty=1;
+    } else if((m=s.match(reDash))||(m=s.match(reSpace))||(m=s.match(reLast))){
+      name=m[1].trim().replace(/[.,\-:*–—]+$/,'').trim();
+      let rawPrice=numStr(m[2]);
+      const qm=name.match(/^(\d+)\s+(.{2,})$/);
+      if(qm){qty=parseInt(qm[1]);name=qm[2].trim();price=rawPrice*qty;}
+      else{price=rawPrice;}
+    } else continue;
+
+    name=name.replace(/[.,\-:*–—]+$/,'').trim();
+    if(!name||name.length<2)continue;
+    if(RECEIPT_SKIP.test(name))continue;
+    if(_isGarbageLine(name))continue;
+    if(price<=0||price>9999)continue;
+    name=name.charAt(0).toUpperCase()+name.slice(1);
+    items.push({name,price,qty});
+  }
+  return items;
+}
+
+async function scanAI(b64,mt,m){
+  const ld=document.getElementById(m==='r'?'sc-ld-r':'sc-ld-m');
+  const ldTxt=document.getElementById(m==='r'?'sc-ld-r-txt':'sc-ld-m-txt');
+  ld.style.display='flex';
+  const setStatus=(msg)=>{if(ldTxt)ldTxt.textContent=msg;};
+
+  // Попытка 1: Claude Vision API (через backend-прокси /api/anthropic)
+  {
+    try{
+      setStatus('AI распознаёт...');
+      const prompt=m==='r'
+        ?'This is a receipt/bill photo (may be in German, Russian, Italian, French, Spanish, English or other language). Extract ALL individual purchased line items with their prices. Return ONLY valid JSON (no markdown, no explanation, no code block): {"items":[{"name":"item name in original language","price":0.00,"qty":1},...]}. Rules: qty=1 if single item, qty>1 if quantity shown on line. price=total price for that line (qty × unit price). EXCLUDE: totals, subtotals, taxes (MwSt, TVA, IVA, НДС), tips, service charges, payment method lines (VISA, cash), store address/name lines, receipt numbers, thank-you lines. Only include actual purchased products/dishes.'
+        :'This is a restaurant menu page (may be in any language). Extract ALL dishes/drinks with prices. Return ONLY valid JSON: {"items":[{"name":"dish name","price":0.00,"desc":"short description or empty"},...]}';
+      const resp=await fetch(`${API_BASE}/api/anthropic`,{
+        method:'POST',
+        headers:{
+          'Content-Type':'application/json'
+        },
+        body:JSON.stringify({
+          model:'claude-3-5-haiku-20241022',
+          max_tokens:2000,
+          messages:[{role:'user',content:[
+            {type:'image',source:{type:'base64',media_type:mt,data:b64}},
+            {type:'text',text:prompt}
+          ]}]
+        })
+      });
+      const data=await resp.json();
+      if(data.error)throw new Error(data.error.message);
+      const txt=(data.content?.[0]?.text||'').replace(/```json|```/g,'').trim();
+      const parsed=JSON.parse(txt);
+      const rawItems=parsed.items||[];
+      S.scan.items=rawItems.map(it=>({
+        name:it.name||'Позиция',
+        price:parseFloat(it.price)||0,
+        qty:parseInt(it.qty)||1,
+        desc:it.desc||'',
+        assignments:{}
+      }));
+      ld.style.display='none';
+      if(m==='r'){showParsed('Позиции чека','receipt');}
+      else{showMenuPicker();}
+      return;
+    }catch(e){
+      console.warn('[AI] Ошибка Claude Vision, пробуем Tesseract:',e.message);
+      toast('⚠️ AI недоступен — результат может быть неточным');
+      setStatus('Резервный OCR...');
+    }
+  }
+
+  // Попытка 2: Tesseract.js (загружается динамически только здесь)
+  try{
+    setStatus('Загрузка Tesseract...');
+    await loadTesseract();
+    setStatus('Загрузка словаря...');
+    const dataUrl=`data:${mt};base64,${b64}`;
+    const result=await Tesseract.recognize(dataUrl,'eng+deu',{
+      logger:info=>{
+        if(info.status==='recognizing text'){
+          setStatus(`Распознаём... ${Math.round((info.progress||0)*100)}%`);
+        }
+      }
+    });
+    const rawText=result.data.text||'';
+    console.log('[Tesseract] Raw:\n'+rawText);
+    const items=parseReceiptText(rawText);
+    S.scan.items=items;
+    ld.style.display='none';
+    if(m==='r'){
+      showParsed('Позиции чека','receipt');
+      if(!items.length)toast('⚠️ Не найдено. Добавьте вручную или введите текст');
+    } else {
+      showMenuPicker();
+    }
+  }catch(e){
+    console.error('[OCR]',e);
+    ld.style.display='none';
+    S.scan.items=[];
+    if(m==='r')showParsed('Позиции чека','receipt');
+    else showMenuPicker();
+    toast('❌ Ошибка — введите текст вручную');
+  }
+}
+async function parseText(){
+  const t=document.getElementById('sc-txt').value.trim();
+  if(!t){toast('⚠️ Введите текст');return}
+  // Сначала пробуем Claude через backend-прокси
+  {
+    try{
+      toast('🔄 AI разбирает текст...');
+      const r=await fetch(`${API_BASE}/api/anthropic`,{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({model:'claude-3-5-haiku-20241022',max_tokens:1000,messages:[{role:'user',content:`Parse this receipt/bill text. Return ONLY valid JSON: {"items":[{"name":"item name","price":0.00,"qty":1},...]}. qty>1 if quantity shown. price=total for that line. Exclude totals and taxes.\n\n${t}`}]})
+      });
+      const d=await r.json();
+      if(d.error)throw new Error(d.error.message);
+      const txt=(d.content?.[0]?.text||'').replace(/```json|```/g,'').trim();
+      const parsed=JSON.parse(txt);
+      S.scan.items=(parsed.items||[]).map(it=>({name:it.name,price:parseFloat(it.price)||0,qty:parseInt(it.qty)||1,assignments:{}}));
+      showParsed('Позиции',S.scan.mode);return;
+    }catch(e){console.warn('[AI text parse]',e)}
+  }
+  // Regex парсер
+  const items=parseReceiptText(t);
+  if(items.length){S.scan.items=items;showParsed('Позиции',S.scan.mode);return}
+  toast('⚠️ Формат: "Название   12.90" — по одной позиции на строку')
+}
+
+function escHtml(s){return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+
+function showParsed(title,mode){
+  document.getElementById('sc-parsed-title').textContent=title;
+  document.getElementById('sc-parsed').style.display='flex';
+  document.getElementById('sc-menu-pick').style.display='none';
+  // Hint for non-admin
+  const hint=document.getElementById('sc-assign-hint');
+  if(hint)hint.style.display=S.isAdmin?'none':'block';
+  document.getElementById('sc-exp-date').value=today();
+  document.getElementById('sc-exp-name').value='';
+  renderScanItems();
+  renderAssignPayer();
+}
+
+function renderScanItems(){
+  const canAdmin=S.isAdmin;
+  document.getElementById('sc-items-list').innerHTML=S.scan.items.map((it,i)=>{
+    const qty=it.qty||1;
+    const unitP=qty>1?it.price/qty:it.price;
+    // Member assignment buttons
+    const memberBtns=S.members.map(m=>{
+      const canAssign=canAdmin||m.name===S.me;
+      if(qty===1){
+        // single item — click to assign
+        const active=it.assignedTo===m.name;
+        return `<div onclick="${canAssign?`assignItem(${i},'${m.name}')`:''}"
+          style="display:inline-flex;align-items:center;gap:3px;padding:3px 8px;border-radius:100px;
+                 border:1.5px solid ${active?ac(m.name):'var(--b2)'};
+                 background:${active?ac(m.name)+'22':'transparent'};
+                 cursor:${canAssign?'pointer':'default'};opacity:${canAssign?'1':'0.55'};
+                 transition:all 0.12s;user-select:none">
+          <div style="width:14px;height:14px;border-radius:50%;background:${ac(m.name)};
+                      font-size:0.55rem;display:flex;align-items:center;justify-content:center;
+                      color:#fff;font-weight:700;flex-shrink:0">${m.name[0]}</div>
+          <span style="font-size:0.72rem;font-weight:${active?'700':'500'};color:${active?ac(m.name):'var(--t2)'}">${m.name}</span>
+        </div>`;
+      } else {
+        // multi-qty item — +/- per person
+        const q=(it.assignments||{})[m.name]||0;
+        return `<div style="display:inline-flex;align-items:center;gap:1px;padding:2px 5px;border-radius:100px;
+                            border:1.5px solid ${q>0?ac(m.name):'var(--b2)'};
+                            background:${q>0?ac(m.name)+'22':'transparent'}">
+          <div style="width:14px;height:14px;border-radius:50%;background:${ac(m.name)};
+                      font-size:0.55rem;display:flex;align-items:center;justify-content:center;
+                      color:#fff;font-weight:700;flex-shrink:0">${m.name[0]}</div>
+          ${canAssign?`<button onclick="adjQty(${i},'${m.name}',-1)"
+            style="border:none;background:none;color:var(--t2);cursor:pointer;padding:0 2px;font-size:1.1rem;line-height:1;font-weight:700">−</button>`:''}
+          <span style="font-family:var(--mono);font-size:0.75rem;font-weight:700;min-width:11px;text-align:center;
+                       color:${q>0?ac(m.name):'var(--t3)'}">${q}</span>
+          ${canAssign?`<button onclick="adjQty(${i},'${m.name}',1)"
+            style="border:none;background:none;color:var(--t2);cursor:pointer;padding:0 2px;font-size:1.1rem;line-height:1;font-weight:700">+</button>`:''}
+        </div>`;
+      }
+    }).join('');
+    // Unassigned warning
+    let warn='';
+    if(qty===1&&!it.assignedTo) warn='<span style="font-size:0.67rem;color:var(--red);white-space:nowrap">⚠️</span>';
+    if(qty>1){
+      const assigned=Object.values(it.assignments||{}).reduce((s,v)=>s+v,0);
+      if(assigned<qty)warn=`<span style="font-size:0.67rem;color:var(--amber);white-space:nowrap">⚠️ ${qty-assigned} ост.</span>`;
+    }
+    return `<div style="border-bottom:1px solid var(--b1);padding:9px 0">
+      <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
+        <input style="flex:1;background:transparent;border:none;border-bottom:1px solid var(--b2);
+                      color:var(--text);font-size:0.84rem;padding:3px 4px;outline:none;font-family:inherit;
+                      min-width:0"
+               value="${escHtml(it.name)}" oninput="S.scan.items[${i}].name=this.value"
+               placeholder="Название позиции">
+        ${qty>1?`<input class="rip" style="width:38px;flex-shrink:0;text-align:center" type="number" min="1" max="99"
+               value="${qty}" title="Количество"
+               oninput="S.scan.items[${i}].qty=parseInt(this.value)||1;renderScanItems()">
+               <span style="font-size:0.68rem;color:var(--t3);flex-shrink:0">×</span>`:''}
+        <input class="rip" style="width:62px;flex-shrink:0" type="number" value="${it.price.toFixed(2)}" step="0.01" min="0"
+               placeholder="0.00"
+               oninput="S.scan.items[${i}].price=parseFloat(this.value)||0;updateReceiptSummary()">
+        <button class="btn btn-g btn-sm btn-ic" style="flex-shrink:0" onclick="S.scan.items.splice(${i},1);renderScanItems()">
+          <i data-lucide="x" style="width:11px;height:11px"></i></button>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:5px;align-items:center">
+        ${memberBtns}${warn}
+      </div>
+    </div>`;
+  }).join('');
+  updateReceiptSummary();
+  lucide.createIcons();
+}
+
+function assignItem(i,name){
+  S.scan.items[i].assignedTo=S.scan.items[i].assignedTo===name?null:name;
+  renderScanItems();
+}
+function adjQty(i,name,delta){
+  const it=S.scan.items[i];
+  if(!it.assignments)it.assignments={};
+  it.assignments[name]=Math.max(0,(it.assignments[name]||0)+delta);
+  if(!it.assignments[name])delete it.assignments[name];
+  renderScanItems();
+}
+function addRItem(){
+  S.scan.items.push({name:'Новая позиция',price:0,qty:1});
+  renderScanItems();
+}
+function updScanTotal(){updateReceiptSummary()}
+function updateReceiptSummary(){
+  const total=S.scan.items.reduce((s,i)=>s+i.price,0);
+  document.getElementById('sc-total').textContent=fm(total)+' €';
+  // Per-person summary
+  const personAmt={};S.members.forEach(m=>personAmt[m.name]=0);
+  S.scan.items.forEach(it=>{
+    const qty=it.qty||1;
+    if(qty===1){
+      if(it.assignedTo&&personAmt[it.assignedTo]!==undefined)personAmt[it.assignedTo]+=it.price;
+    } else {
+      const unitP=it.price/qty;
+      Object.entries(it.assignments||{}).forEach(([n,q])=>{
+        if(personAmt[n]!==undefined)personAmt[n]+=unitP*q;
+      });
+    }
+  });
+  const sumEl=document.getElementById('sc-person-summary');
+  if(!sumEl)return;
+  const hasAny=Object.values(personAmt).some(v=>v>0.001);
+  sumEl.style.display=hasAny?'block':'none';
+  if(!hasAny)return;
+  sumEl.innerHTML=`<div style="padding:10px 12px;background:var(--s1);border:1px solid var(--b1);border-radius:var(--rsm);margin:6px 0">
+    <div style="font-size:0.68rem;color:var(--t3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">Итог по участникам</div>
+    ${S.members.filter(m=>personAmt[m.name]>0.001).map(m=>`
+    <div style="display:flex;justify-content:space-between;font-size:0.82rem;margin-bottom:3px">
+      <span style="color:${ac(m.name)};font-weight:500">${m.name}</span>
+      <span style="font-family:var(--mono);font-weight:600">${fm(personAmt[m.name])} €</span>
+    </div>`).join('')}
+  </div>`;
+}
+function renderAssignPayer(){
+  S.scan.menuPaidBy=S.me;
+  const el=document.getElementById('sc-assign-payer');
+  if(!el)return;
+  el.innerHTML=S.members.map(m=>{
+    const canSelect=S.isAdmin||m.name===S.me;
+    return `<div class="wp ${m.name===S.me?'on':''}" data-ap="${m.name}"
+      ${canSelect?`onclick="selAP(this,'${m.name}')"`:''}
+      style="${!canSelect?'opacity:0.38;cursor:default;pointer-events:none':''}">
+      <div class="av av-sm" style="background:${ac(m.name)}">${m.name[0]}</div>
+      <span style="color:${ac(m.name)};font-weight:600">${m.name}</span>
+    </div>`;
+  }).join('');
+}
+function selAP(el,name){document.querySelectorAll('[data-ap]').forEach(b=>b.classList.remove('on'));el.classList.add('on');S.scan.menuPaidBy=name}
+
+function saveReceiptExp(){
+  const name=document.getElementById('sc-exp-name').value.trim()||'Счёт';
+  const date=document.getElementById('sc-exp-date').value;
+  if(!S.scan.items.length){toast('⚠️ Нет позиций');return}
+  const total=S.scan.items.reduce((s,i)=>s+i.price,0);
+  if(!total){toast('⚠️ Сумма равна 0');return}
+  // Build per-person amounts
+  const personAmt={};
+  S.scan.items.forEach(it=>{
+    const qty=it.qty||1;
+    if(qty===1){
+      const nm=it.assignedTo||null;
+      if(nm)personAmt[nm]=(personAmt[nm]||0)+it.price;
+    } else {
+      const unitP=it.price/qty;
+      Object.entries(it.assignments||{}).forEach(([n,q])=>{
+        if(q>0)personAmt[n]=(personAmt[n]||0)+unitP*q;
+      });
+    }
+  });
+  const participants=Object.keys(personAmt).length?Object.keys(personAmt):S.members.map(m=>m.name);
+  const paidByEl=document.querySelector('[data-ap].on');
+  const paidBy=paidByEl?paidByEl.dataset.ap:S.me;
+  const items=S.scan.items.map(i=>({name:i.name,price:i.price,assignedTo:i.assignedTo||'Все'}));
+  const exp={id:uid(),name,amount:total,comment:`${S.scan.items.length} поз.`,date,paidBy,participants,fromTreasury:false,items};
+  S.expenses.push(exp);
+  // Save to receipt archive (metadata only)
+  if(!S.receipts)S.receipts=[];
+  S.receipts.push({id:uid(),expenseId:exp.id,merchant:name,amount:total,date:date||today(),itemCount:S.scan.items.length,savedAt:today()});
+  save();renderAll();
+  S.scan.items=[];
+  document.getElementById('sc-parsed').style.display='none';
+  document.getElementById('sc-prev-r').style.display='none';
+  document.getElementById('sc-exp-name').value='';
+  toast('✅ Сохранено — '+fm(total)+' €');goPage('pg-exp');
+}
+
+// MENU PICKER
+function showMenuPicker(){
+  document.getElementById('sc-parsed').style.display='none';
+  document.getElementById('sc-menu-pick').style.display='flex';
+  S.scan.menuSelections={};S.members.forEach(m=>S.scan.menuSelections[m.name]=[]);
+  S.scan.menuPaidBy=S.me;
+  renderMenuPicker();
+}
+function renderMenuPicker(){
+  // Person buttons
+  document.getElementById('sc-pick-persons').innerHTML=S.members.map(m=>
+    `<button class="btn btn-sm ${m.name===S.scan.menuPaidBy?'btn-p':'btn-s'}" onclick="setMenuPerson('${m.name}')">
+      <div class="av av-sm" style="background:${ac(m.name)}">${m.name[0]}</div>
+      <span style="color:${m.name===S.scan.menuPaidBy?'#fff':ac(m.name)};font-weight:600">${m.name}</span>
+    </button>`).join('');
+  // Items (current person = who is selecting, default me)
+  if(!S.scan.menuPerson)S.scan.menuPerson=S.me;
+  const sel=S.scan.menuSelections[S.scan.menuPerson]||[];
+  document.getElementById('sc-pick-items').innerHTML=S.scan.items.map((it,i)=>{
+    const ok=sel.includes(i);
+    return `<div class="mpick ${ok?'ok':''}" onclick="toggleMenuItem(${i})">
+      <div class="mchk">${ok?'✓':''}</div>
+      <div style="flex:1"><div style="font-size:0.86rem;font-weight:500">${it.name}</div>${it.desc?`<div style="font-size:0.72rem;color:var(--t2)">${it.desc}</div>`:''}</div>
+      <div style="font-family:var(--mono);font-weight:600;font-size:0.86rem">${fm(it.price)} €</div>
+    </div>`
+  }).join('');
+  // Payer (who pays the bill)
+  document.getElementById('sc-pick-payer').innerHTML=S.members.map(m=>{
+    const canSelect=S.isAdmin||m.name===S.me;
+    return `<div class="wp ${m.name===S.scan.menuPaidBy?'on':''}" data-mpayer="${m.name}"
+      ${canSelect?`onclick="setMenuPaidBy('${m.name}')"`:''}
+      style="${!canSelect?'opacity:0.38;cursor:default;pointer-events:none':''}">
+      <div class="av av-sm" style="background:${ac(m.name)}">${m.name[0]}</div>
+      <span style="color:${ac(m.name)};font-weight:600">${m.name}</span>
+    </div>`;
+  }).join('');
+  updMenuTotals();lucide.createIcons()
+}
+function setMenuPerson(name){S.scan.menuPerson=name;renderMenuPicker()}
+function setMenuPaidBy(name){S.scan.menuPaidBy=name;renderMenuPicker()}
+function toggleMenuItem(i){
+  const sel=S.scan.menuSelections[S.scan.menuPerson]||[];
+  const idx=sel.indexOf(i);idx>=0?sel.splice(idx,1):sel.push(i);
+  S.scan.menuSelections[S.scan.menuPerson]=sel;renderMenuPicker()
+}
+function updMenuTotals(){
+  let grand=0;
+  document.getElementById('sc-pick-totals').innerHTML=S.members.map(m=>{
+    const sel=S.scan.menuSelections[m.name]||[];
+    const sum=sel.reduce((s,i)=>s+(S.scan.items[i]?.price||0),0);
+    grand+=sum;
+    return `<div style="display:flex;justify-content:space-between;font-size:0.8rem;color:${sum>0?ac(m.name):'var(--t3)'}">
+      <span>${m.name} (${sel.length} поз.)</span><span style="font-family:var(--mono)">${fm(sum)} €</span>
+    </div>`
+  }).join('');
+  document.getElementById('sc-pick-grand').textContent=fm(grand)+' €';
+}
+function saveMenuExp(){
+  const items=[];
+  S.members.forEach(m=>{
+    (S.scan.menuSelections[m.name]||[]).forEach(i=>{
+      items.push({name:S.scan.items[i].name,price:S.scan.items[i].price,assignedTo:m.name})
+    })
+  });
+  const total=items.reduce((s,i)=>s+i.price,0);
+  if(!total){toast('⚠️ Никто ничего не выбрал');return}
+  const parts=[...new Set(items.map(i=>i.assignedTo))];
+  const exp={id:uid(),name:'Заказ из меню',amount:total,comment:`${items.length} позиций`,date:today(),paidBy:S.scan.menuPaidBy||S.me,participants:parts,fromTreasury:false,items};
+  S.expenses.push(exp);save();renderAll();
+  S.scan.menuSelections={};S.scan.menuPerson=null;
+  document.getElementById('sc-menu-pick').style.display='none';
+  toast('✅ Сохранено — '+fm(total)+' €');goPage('pg-exp')
+}
+
+// showAssign kept for backward compat (now goes to sc-parsed)
+function showAssign(){showParsed('Позиции чека','receipt')}
+
+// =======================================================
+// QR & SHARE
+// =======================================================
+function tripURL(){
+  // В Capacitor (Android) location.origin = 'https://localhost' — нерабочая ссылка.
+  // Также при локальной разработке через file:// тоже нужен абсолютный URL.
+  const isCapacitor = window.Capacitor?.isNativePlatform?.();
+  const isLocal = location.protocol === 'file:'
+    || location.hostname === 'localhost'
+    || location.hostname === '127.0.0.1';
+  const base = (isCapacitor || isLocal)
+    ? 'https://splitaway.netlify.app'
+    : (location.origin + location.pathname.replace(/\/[^/]*$/, '/'));
+  let url = base + '?trip=' + encodeURIComponent(S.trip.id);
+  if(S.inviteToken) url += '&token=' + encodeURIComponent(S.inviteToken);
+  return url;
+}
+async function openQR(){
+  const code=S.trip.id;
+  const url=tripURL();
+  document.getElementById('qr-code').textContent=code;
+  document.getElementById('qr-link').textContent=url;
+
+  // Настоящий сканируемый QR-код (загружаем библиотеку по требованию)
+  const qrEl=document.getElementById('qr-canvas');
+  qrEl.innerHTML='<div style="color:var(--t3);font-size:0.8rem;padding:16px">Загрузка QR...</div>';
+  try{
+    await loadQRCode();
+    qrEl.innerHTML='';
+    new QRCode(qrEl,{
+      text:url,
+      width:200,height:200,
+      colorDark:'#1a1a2e',
+      colorLight:'#ffffff',
+      correctLevel:QRCode.CorrectLevel.M
+    });
+  }catch(e){
+    qrEl.innerHTML='<div style="color:var(--red);font-size:0.8rem;padding:16px">❌ Не удалось загрузить QR</div>';
+    console.warn('[QR]',e);
+  }
+
+  // Подсказка под QR
+  const isCapacitorApp = window.Capacitor?.isNativePlatform?.();
+  const isLocalDev = !isCapacitorApp && (location.hostname==='localhost'||location.hostname==='127.0.0.1');
+  const hint=document.getElementById('qr-hint');
+  if(hint){
+    if(isLocalDev){
+      // Локальная разработка в браузере — ссылка ведёт на localhost, другие устройства не откроют
+      hint.style.background='rgba(255,95,110,0.1)';
+      hint.style.border='1px solid rgba(255,95,110,0.25)';
+      hint.style.color='var(--red)';
+      hint.innerHTML='⚠️ <b>Только для разработки</b> — QR ведёт на localhost:3000.<br>'
+        +'Чтобы другие подключились: открой браузер по адресу <b>http://[твой IP]:3000</b> (найди IP через <code style="background:rgba(255,255,255,0.1);padding:1px 4px;border-radius:3px">ipconfig</code>).<br>'
+        +'В продакшн (Netlify / Android) ссылка автоматически рабочая.';
+    } else {
+      hint.style.background='rgba(34,211,160,0.08)';
+      hint.style.border='1px solid rgba(34,211,160,0.2)';
+      hint.style.color='var(--green)';
+      hint.innerHTML='✅ QR-код и ссылка рабочие — участники смогут присоединиться.';
+    }
+  }
+  openModal('m-qr');lucide.createIcons();
+}
+
+
+function copyCode(){
+  navigator.clipboard?.writeText(S.trip.id).then(()=>toast('📋 Код скопирован: '+S.trip.id))
+    .catch(()=>{toast('Код поездки: '+S.trip.id)})
+}
+function copyLink(){
+  navigator.clipboard?.writeText(tripURL()).then(()=>toast('📋 Ссылка скопирована'))
+    .catch(()=>toast('Ссылка: '+tripURL()))
+}
+function waShare(){
+  const msg=encodeURIComponent(`✈️ Присоединяйся к поездке "${S.trip.name}" в Splitaway!\n\nКод: ${S.trip.id}\n\nОткрыть: ${tripURL()}`);
+  window.open('https://wa.me/?text='+msg,'_blank')
+}
+
+// =======================================================
+// NAVIGATION
+// =======================================================
+function goPage(id,btn){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  const navIdx={'pg-dash':0,'pg-exp':1,'pg-scan':2,'pg-bal':3,'pg-cash':4,'pg-set':5};
+  if(btn){document.querySelectorAll('.ni').forEach(n=>n.classList.remove('active'));btn.classList.add('active')}
+  else{const idx=navIdx[id];if(idx!==undefined)document.querySelectorAll('.ni').forEach((n,i)=>n.classList.toggle('active',i===idx))}
+  if(id==='pg-bal')renderBalances();
+  if(id==='pg-cash')renderTreasury();
+  if(id==='pg-dash')renderDash();
+  if(id==='pg-exp')renderExpenses();
+  if(id==='pg-set')renderSettings();
+}
+function toggleTheme(){
+  const cur=document.documentElement.getAttribute('data-theme')||'';
+  const t=cur==='light'?'dark':'light';
+  document.documentElement.setAttribute('data-theme',t);
+  localStorage.setItem('sw_theme',t);
+  // Update toggle button icon in settings
+  const tBtn=document.getElementById('set-theme-btn');
+  if(tBtn)tBtn.innerHTML=t==='light'
+    ?'<i data-lucide="moon" style="width:16px;height:16px"></i> Тёмная тема'
+    :'<i data-lucide="sun" style="width:16px;height:16px"></i> Светлая тема';
+  lucide.createIcons();
+}
+
+// =======================================================
+// STORAGE — localStorage (fallback) + Supabase (primary)
+// =======================================================
+const USE_SUPABASE = true; // Supabase включён
+
+// Сохраняем только в localStorage (используется внутри loadFromSupabase)
+function saveLocal(){
+  if(!S.trip)return;
+  localStorage.setItem('sw_'+S.trip.id,JSON.stringify({
+    trip:S.trip,adminName:S.adminName,coAdmins:S.coAdmins||[],
+    me:S.me,meGender:S.meGender,
+    members:S.members,groups:S.groups,
+    expenses:S.expenses,treasury:S.treasury,receipts:S.receipts||[],
+    memberColors:S.memberColors||{},settledDebts:S.settledDebts||[]
+  }));
+  localStorage.setItem('sw_last',S.trip.id);
+  // Токены хранятся отдельно (не в общем blob) для безопасности
+  if(S.inviteToken)localStorage.setItem('sw_invite_'+S.trip.id,S.inviteToken);
+  if(S.adminToken)localStorage.setItem('sw_admin_'+S.trip.id,S.adminToken);
+}
+
+function save(){
+  saveLocal();
+  if(USE_SUPABASE){
+    clearTimeout(_syncTimer);
+    _syncTimer=setTimeout(sbSync,500); // debounce 500ms
+  }
+}
+
+// ============================================================
+// SUPABASE SYNC — полная синхронизация состояния
+// ============================================================
+
+// Вспомогательная функция: проверяет/нормализует UUID
+function ensureUUID(id){
+  const rx=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  return id&&rx.test(id)?id:crypto.randomUUID();
+}
+
+// Полная синхронизация состояния в Supabase
+// Если есть invite_token — через защищённый RPC (новый путь)
+// Иначе — прямые запросы к таблицам (старые поездки, backward compat)
+async function sbSync(){
+  if(!S.trip)return;
+  const sb=await getSupabase();
+  if(!sb)return;
+  _sbSyncing=true;
+  _lastSyncTime=Date.now();
+  try{
+    if(S.inviteToken){
+      // Новый безопасный путь: один RPC вместо 5 прямых запросов
+      const payload={
+        trip:{id:S.trip.id,name:S.trip.name,dest:S.trip.dest||null},
+        members:S.members.map(m=>({name:m.name,gender:m.gender||'m',is_admin:isAdm(m.name)})),
+        groups:S.groups.map(g=>({id:ensureUUID(g.id),type:g.type,label:g.label||null,members:g.members})),
+        expenses:S.expenses.map(e=>({
+          id:ensureUUID(e.id),name:e.name,amount:e.amount,
+          comment:e.comment||null,date:e.date||null,
+          paid_by:e.paidBy,participants:e.participants||[],
+          from_treasury:e.fromTreasury||false,items:e.items||[],
+          created_by:e.createdBy||null
+        })),
+        treasury:{
+          total:S.treasury.total||0,
+          spent:S.treasury.spent||0,
+          contributions:S.treasury.contributions||[],
+          holder:S.treasury.holder||null,
+          settled_debts:S.settledDebts||[]
+        }
+      };
+      const{data,error}=await sb.rpc('sync_trip_data',{
+        p_invite_token:S.inviteToken,
+        p_data:payload
+      });
+      if(error)throw error;
+      if(data?.error)throw new Error(data.error);
+      console.log('[SB] ✅ Secure sync OK');
+    } else {
+      // Legacy путь: прямые запросы (старые поездки без invite_token)
+      await _sbSyncLegacy(sb);
+    }
+  }catch(err){
+    console.warn('[SB] Sync error:',err.message||err);
+  }finally{
+    setTimeout(()=>{_sbSyncing=false;},600);
+  }
+}
+
+// Legacy sync — прямые запросы к таблицам (backward compat для старых поездок)
+async function _sbSyncLegacy(sb){
+  // 1. Upsert поездки
+  await sb.from('trips').upsert(
+    {id:S.trip.id,name:S.trip.name,dest:S.trip.dest||null},
+    {onConflict:'id'}
+  );
+  // 2. Участники
+  if(S.members.length){
+    await sb.from('members').upsert(
+      S.members.map(m=>({trip_id:S.trip.id,name:m.name,gender:m.gender||'m',is_admin:isAdm(m.name)})),
+      {onConflict:'trip_id,name'}
+    );
+    await sb.from('members').delete()
+      .eq('trip_id',S.trip.id)
+      .not('name','in',`(${S.members.map(m=>`"${m.name}"`).join(',')})`);
+  } else {
+    await sb.from('members').delete().eq('trip_id',S.trip.id);
+  }
+  // 3. Группы
+  if(S.groups.length){
+    const gIds=S.groups.map(g=>ensureUUID(g.id));
+    await sb.from('groups').upsert(
+      S.groups.map(g=>({id:ensureUUID(g.id),trip_id:S.trip.id,type:g.type,label:g.label||null,members:g.members})),
+      {onConflict:'id'}
+    );
+    await sb.from('groups').delete()
+      .eq('trip_id',S.trip.id)
+      .not('id','in',`(${gIds.map(id=>`"${id}"`).join(',')})`);
+  } else {
+    await sb.from('groups').delete().eq('trip_id',S.trip.id);
+  }
+  // 4. Расходы
+  if(S.expenses.length){
+    const eIds=S.expenses.map(e=>ensureUUID(e.id));
+    await sb.from('expenses').upsert(
+      S.expenses.map(e=>({
+        id:ensureUUID(e.id),trip_id:S.trip.id,name:e.name,amount:e.amount,
+        comment:e.comment||null,date:e.date||null,paid_by:e.paidBy,
+        participants:e.participants||[],from_treasury:e.fromTreasury||false,
+        items:e.items||[],created_by:e.createdBy||null
+      })),
+      {onConflict:'id'}
+    );
+    await sb.from('expenses').delete()
+      .eq('trip_id',S.trip.id)
+      .not('id','in',`(${eIds.map(id=>`"${id}"`).join(',')})`);
+  } else {
+    await sb.from('expenses').delete().eq('trip_id',S.trip.id);
+  }
+  // 5. Касса
+  try{
+    await sb.from('treasury').upsert(
+      {
+        trip_id:S.trip.id,total:S.treasury.total||0,spent:S.treasury.spent||0,
+        contributions:S.treasury.contributions||[],
+        holder:S.treasury.holder||null,
+        settled_debts:S.settledDebts||[]
+      },
+      {onConflict:'trip_id'}
+    );
+  }catch(e){
+    await sb.from('treasury').upsert(
+      {trip_id:S.trip.id,total:S.treasury.total||0,spent:S.treasury.spent||0},
+      {onConflict:'trip_id'}
+    );
+  }
+  console.log('[SB] ✅ Legacy sync OK');
+}
+
+// Синоним для обратной совместимости
+async function syncToSupabase(){await sbSync();}
+
+// ============================================================
+// ЗАГРУЗКА ДАННЫХ ИЗ SUPABASE
+// ============================================================
+async function loadFromSupabase(tripId){
+  const sb=await getSupabase();
+  if(!sb)return false;
+  try{
+    const[tRes,mRes,gRes,eRes,trRes]=await Promise.all([
+      sb.from('trips').select('*').eq('id',tripId).single(),
+      sb.from('members').select('*').eq('trip_id',tripId).order('created_at'),
+      sb.from('groups').select('*').eq('trip_id',tripId).order('created_at'),
+      sb.from('expenses').select('*').eq('trip_id',tripId).order('created_at'),
+      sb.from('treasury').select('*').eq('trip_id',tripId).single()
+    ]);
+    if(!tRes.data)return false;
+    S.trip={id:tRes.data.id,name:tRes.data.name,dest:tRes.data.dest};
+    const adminList=(mRes.data||[]).filter(m=>m.is_admin).map(m=>m.name);
+    S.adminName=adminList[0]||(mRes.data||[])[0]?.name||'';
+    S.coAdmins=adminList.slice(1); // остальные admins — co-admins
+    S.members=(mRes.data||[]).map(m=>({name:m.name,gender:m.gender||'m'}));
+    S.groups=(gRes.data||[]).map(g=>({id:g.id,type:g.type,label:g.label,members:g.members||[]}));
+    S.expenses=(eRes.data||[]).map(e=>({
+      id:e.id,name:e.name,amount:parseFloat(e.amount),
+      comment:e.comment||'',date:e.date||'',
+      paidBy:e.paid_by,participants:e.participants||[],
+      fromTreasury:e.from_treasury||false,items:e.items||[],
+      createdBy:e.created_by||null
+    }));
+    S.treasury={
+      total:parseFloat(trRes.data?.total||0),
+      spent:parseFloat(trRes.data?.spent||0),
+      contributions:trRes.data?.contributions||[],
+      holder:trRes.data?.holder||null
+    };
+    // settledDebts теперь в Supabase; localStorage — fallback для старых данных
+    S.settledDebts=trRes.data?.settled_debts||[];
+    // Local-only fields (не в Supabase)
+    const rawLocal=localStorage.getItem('sw_'+tripId);
+    const localD=rawLocal?JSON.parse(rawLocal):null;
+    S.receipts=localD?.receipts||[];
+    S.memberColors=localD?.memberColors||{};
+    // Мёрджим settledDebts из localStorage если Supabase вернул пустой массив
+    if(!S.settledDebts.length&&localD?.settledDebts?.length){
+      S.settledDebts=localD.settledDebts;
+    }
+    // Holder из localStorage как fallback
+    if(!S.treasury.holder&&localD?.treasury?.holder)S.treasury.holder=localD.treasury.holder;
+    saveLocal(); // кэшируем в localStorage
+    return true;
+  }catch(err){
+    console.warn('[SB] Load error:',err.message||err);
+    return false;
+  }
+}
+
+// ============================================================
+// REALTIME — подписка на изменения других участников
+// ============================================================
+let _reloadTimer=null;
+
+async function reloadFromRemote(){
+  clearTimeout(_reloadTimer);
+  _reloadTimer=setTimeout(async()=>{
+    if(!S.trip)return;
+    // Пропускаем если это наши собственные изменения (< 1200ms с нашего последнего sync)
+    if(Date.now()-_lastSyncTime<1200){
+      console.log('[RT] skip — own changes');return;
+    }
+    console.log('[RT] 🔄 Remote change detected, reloading...');
+    const me=S.me,myReceipts=S.receipts||[];
+    const ok=await loadFromSupabase(S.trip.id);
+    if(ok){
+      S.me=me;
+      S.meGender=S.members.find(m=>m.name===me)?.gender||'m';
+      S.isAdmin=isAdm(me);
+      if(!S.receipts||!S.receipts.length)S.receipts=myReceipts;
+      renderAll();
+      toast('🔄 Синхронизация');
+    }
+  },1000);
+}
+
+let _pollTimer=null;
+
+async function startRealtime(){
+  if(!USE_SUPABASE||!S.trip)return;
+  const sb=await getSupabase();
+  if(!sb)return;
+  if(_rtChannel){await sb.removeChannel(_rtChannel);_rtChannel=null;}
+  _rtChannel=sb.channel(`trip:${S.trip.id}`)
+    .on('postgres_changes',{event:'*',schema:'public',table:'expenses',
+      filter:`trip_id=eq.${S.trip.id}`},
+      ()=>reloadFromRemote())
+    .on('postgres_changes',{event:'*',schema:'public',table:'members',
+      filter:`trip_id=eq.${S.trip.id}`},
+      ()=>reloadFromRemote())
+    .on('postgres_changes',{event:'*',schema:'public',table:'groups',
+      filter:`trip_id=eq.${S.trip.id}`},
+      ()=>reloadFromRemote())
+    .on('postgres_changes',{event:'*',schema:'public',table:'treasury',
+      filter:`trip_id=eq.${S.trip.id}`},
+      ()=>reloadFromRemote())
+    .subscribe(status=>{
+      console.log('[RT] Status:',status);
+      updateRTIndicator(status==='SUBSCRIBED');
+    });
+
+  // Polling-fallback: каждые 20 сек проверяем Supabase
+  clearInterval(_pollTimer);
+  _pollTimer=setInterval(()=>{
+    if(S.trip&&Date.now()-_lastSyncTime>5000)reloadFromRemote();
+  },20000);
+
+  // При возврате на вкладку — сразу проверяем
+  document.addEventListener('visibilitychange',()=>{
+    if(!document.hidden&&S.trip&&Date.now()-_lastSyncTime>3000)reloadFromRemote();
+  },{once:false});
+}
+
+function updateRTIndicator(online){
+  const el=document.getElementById('rt-indicator');
+  if(!el)return;
+  el.style.background=online?'var(--green)':'var(--red)';
+  el.title=online?'Онлайн — данные синхронизируются':'Офлайн';
+}
+
+// =======================================================
+// PUSH NOTIFICATIONS
+// =======================================================
+let pushEnabled = localStorage.getItem('sw_push')==='1';
+
+async function togglePush(){
+  if(!('Notification' in window)){toast('❌ Браузер не поддерживает уведомления');return}
+  if(Notification.permission==='denied'){toast('❌ Уведомления заблокированы — разрешите в настройках браузера');return}
+  if(pushEnabled){
+    pushEnabled=false;
+    localStorage.removeItem('sw_push');
+    updatePushBtn();
+    toast('🔕 Уведомления отключены');
+  } else {
+    const perm=await Notification.requestPermission();
+    if(perm==='granted'){
+      pushEnabled=true;
+      localStorage.setItem('sw_push','1');
+      updatePushBtn();
+      toast('🔔 Уведомления включены');
+      showLocalNotification('Splitaway','Уведомления включены! Вы будете получать обновления по поездке.');
+    } else {
+      toast('⚠️ Разрешите уведомления в браузере');
+    }
+  }
+}
+
+function updatePushBtn(){
+  const btn=document.getElementById('push-btn');
+  if(!btn)return;
+  btn.style.borderColor=pushEnabled?'var(--green)':'var(--b1)';
+  btn.style.color=pushEnabled?'var(--green)':'var(--t2)';
+  btn.title=pushEnabled?'Уведомления включены':'Уведомления выключены';
+}
+
+function showLocalNotification(title,body){
+  if(!pushEnabled||Notification.permission!=='granted')return;
+  if(navigator.serviceWorker?.controller){
+    navigator.serviceWorker.ready.then(reg=>{
+      reg.showNotification(title,{
+        body, icon:'/icons/icon-192.png', badge:'/icons/icon-72.png',
+        tag:'splitaway', vibrate:[150,75,150]
+      });
+    });
+  } else {
+    new Notification(title,{body,icon:'/icons/icon-192.png'});
+  }
+}
+
+// Уведомление при добавлении расхода другим участником
+function notifyNewExpense(expName,paidBy,amount){
+  if(paidBy===S.me)return; // не уведомляем себя
+  showLocalNotification(
+    '💳 Новый расход в '+S.trip?.name,
+    `${paidBy} добавил: ${expName} — ${fm(amount)} €`
+  );
+}
+
+// =======================================================
+// SERVICE WORKER REGISTRATION
+// =======================================================
+async function registerSW(){
+  if(!('serviceWorker' in navigator))return;
+  try{
+    const reg=await navigator.serviceWorker.register('/sw.js',{scope:'/'});
+    console.log('[SW] Registered, scope:',reg.scope);
+
+    // Обновление SW
+    reg.addEventListener('updatefound',()=>{
+      const nw=reg.installing;
+      nw.addEventListener('statechange',()=>{
+        if(nw.state==='installed'&&navigator.serviceWorker.controller){
+          showUpdateBanner();
+        }
+      });
+    });
+  }catch(e){
+    console.warn('[SW] Registration failed:',e);
+  }
+}
+
+function showUpdateBanner(){
+  const b=document.createElement('div');
+  b.style.cssText='position:fixed;top:0;left:0;right:0;z-index:999;background:var(--accent);color:#fff;padding:12px 18px;display:flex;align-items:center;justify-content:space-between;font-size:0.84rem;font-weight:600';
+  b.innerHTML='🔄 Доступно обновление Splitaway<button onclick="location.reload()" style="background:rgba(255,255,255,0.2);border:none;color:#fff;padding:5px 12px;border-radius:8px;cursor:pointer;font-weight:700">Обновить</button>';
+  document.body.prepend(b);
+}
+
+// Онлайн/офлайн индикатор
+window.addEventListener('online',()=>{
+  updateRTIndicator(true);
+  toast('🌐 Подключение восстановлено');
+  // Регистрируем Background Sync при восстановлении связи
+  if('serviceWorker' in navigator&&'SyncManager' in window){
+    navigator.serviceWorker.ready.then(reg=>reg.sync.register('sync-expenses')).catch(()=>{});
+  } else if(S.trip){
+    // Fallback: сразу синхронизируем если Background Sync не поддерживается
+    setTimeout(()=>{ if(USE_SUPABASE&&S.trip)sbSync(); },1000);
+  }
+});
+window.addEventListener('offline',()=>{updateRTIndicator(false);toast('📴 Офлайн — данные сохранены локально')});
+
+// Слушаем SW_SYNC_READY — Service Worker сигнализирует что сеть восстановлена
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.addEventListener('message', event => {
+    if(event.data?.type==='SW_SYNC_READY'&&S.trip&&USE_SUPABASE){
+      console.log('[SW→Page] Sync triggered by background sync');
+      sbSync();
+    }
+  });
+}
+
+// =======================================================
+// INIT
+// =======================================================
+function init(){
+  lucide.createIcons();
+
+  // Восстанавливаем тему (если явно выбрана, иначе — системная через CSS media query)
+  const savedTheme=localStorage.getItem('sw_theme');
+  if(savedTheme){document.documentElement.setAttribute('data-theme',savedTheme);}
+  // else: data-theme не ставим — CSS @media(prefers-color-scheme) сработает автоматически
+
+  // Регистрируем Service Worker
+  registerSW();
+
+  // Восстанавливаем push-состояние
+  pushEnabled=localStorage.getItem('sw_push')==='1';
+  updatePushBtn();
+
+  // URL параметры
+  const p=new URLSearchParams(location.search),tc=p.get('trip');
+  const urlToken=p.get('token'); // invite_token из ссылки-приглашения
+
+  // Quick-action из URL (?action=add-expense)
+  const action=p.get('action');
+
+  // Если в URL есть ?trip=CODE — показываем форму входа и авто-присоединяемся
+  if(tc){
+    showOb('ob-s1');
+    document.getElementById('ob-code').value=tc.toUpperCase();
+    // Передаём invite_token в joinTrip() через глобальную переменную
+    if(urlToken)window._pendingInviteToken=urlToken;
+    // Авто-присоединение после инициализации Supabase
+    setTimeout(()=>joinTrip(),600);
+    return;
+  }
+
+  // Загружаем последнюю поездку
+  const last=localStorage.getItem('sw_last');
+  if(last){
+    const raw=localStorage.getItem('sw_'+last);
+    if(raw){
+      try{
+        const d=JSON.parse(raw);
+        S.trip=d.trip;
+        S.adminName=d.adminName||'';
+        S.coAdmins=d.coAdmins||[];
+        S.members=(d.members||[]).map(m=>typeof m==='string'?{name:m,gender:'m'}:m);
+        S.groups=d.groups||[];
+        S.expenses=d.expenses||[];
+        S.treasury=d.treasury||{total:0,spent:0,contributions:[],holder:null};
+        if(!S.treasury.contributions)S.treasury.contributions=[];
+        S.receipts=d.receipts||[];
+        S.memberColors=d.memberColors||{};
+        S.settledDebts=d.settledDebts||[];
+        S.me=d.me||S.members[0]?.name||'';
+        S.meGender=d.meGender||S.members.find(m=>m.name===S.me)?.gender||'m';
+        S.isAdmin=S.me===(S.adminName||'')||(S.coAdmins||[]).includes(S.me);
+        // Восстанавливаем токены из localStorage (не хранятся в основном blob)
+        S.inviteToken=localStorage.getItem('sw_invite_'+last)||null;
+        S.adminToken=localStorage.getItem('sw_admin_'+last)||null;
+        launch(); // startRealtime() вызывается внутри launch()
+        // Обновляем из Supabase в фоне (получаем свежие данные от других)
+        if(USE_SUPABASE){
+          const me=S.me,savedAdmin=S.isAdmin,myReceipts=S.receipts||[];
+          const savedInvite=S.inviteToken,savedAdmin2=S.adminToken;
+          loadFromSupabase(S.trip.id).then(ok=>{
+            if(ok){
+              S.me=me;
+              S.meGender=S.members.find(m=>m.name===me)?.gender||'m';
+              S.isAdmin=savedAdmin;
+              S.inviteToken=savedInvite;
+              S.adminToken=savedAdmin2;
+              if(!S.receipts||!S.receipts.length)S.receipts=myReceipts;
+              renderAll();
+            }
+          }).catch(()=>{});
+        }
+        // Открыть форму добавления если пришли через shortcut
+        if(action==='add-expense')setTimeout(()=>openAddExp(),400);
+        return;
+      }catch(e){console.error('Init error:',e)}
+    }
+  }
+
+  // ---- Capacitor: обработка deep links (когда приложение уже запущено) ----
+  // window.Capacitor инжектируется нативным мостом только в APK/AAB;
+  // в браузере этот блок просто не выполняется.
+  if(window.Capacitor?.isNativePlatform?.() && window.Capacitor.Plugins?.App){
+    window.Capacitor.Plugins.App.addListener('appUrlOpen', data => {
+      try{
+        const u=new URL(data.url);
+        const tc=u.searchParams.get('trip');
+        const tok=u.searchParams.get('token');
+        if(tc){
+          if(tok)window._pendingInviteToken=tok;
+          showOb('ob-s1');
+          document.getElementById('ob-code').value=tc.toUpperCase();
+          joinTrip();
+        }
+      }catch(e){console.warn('[Cap] appUrlOpen parse error:',e)}
+    });
+  }
+}
+// Запускаем после загрузки всех defer-скриптов (в т.ч. lucide)
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>

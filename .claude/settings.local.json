@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__Claude_Preview__preview_start",
+      "Bash(cmd.exe /c \"where npx\")",
+      "Bash(cmd.exe /c \"npx --version\")",
+      "Bash(cmd.exe /c \"echo %PATH%\")",
+      "Bash(tr ';' '\\\\n')",
+      "Bash(echo $PATH)",
+      "Bash(\"/c/Program Files/nodejs/npm.cmd\" install)"
+    ]
+  }
+}
