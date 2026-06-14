@@ -2467,7 +2467,7 @@ async function toB64(file,maxPx=1200){
   });
 }
 // Слова-стоп для итогов/налогов чека (многоязычные)
-const RECEIPT_SKIP=/^(итого|total|gesamt|summe|tax|ндс|mwst|ust|service|tip|trinkgeld|subtotal|zwischensumme|к оплате|сдача|change|cash|visa|master|kreditkarte|rechnung|danke|vielen|bon|umsatz|netto|brutto|rabatt|discount|coupon|void|storno)/i;
+const RECEIPT_SKIP=/^(итого|total|gesamt|summe|tax|ндс|mwst|ust|service|tip|trinkgeld|subtotal|zwischensumme|к оплате|сдача|change|cash|visa|master|kreditkarte|rechnung|danke|vielen|bon|umsatz|netto|brutto|rabatt|discount|coupon|void|storno|beleg|bon-nr|kassennr|kassen|terminal|bel\.nr|rechnungs|quittung|tankstelle|zapfs|zahlung|debit|kredit|ec-karte|paywave|contactless|transaktion|genehmigung|autorisierung)/i;
 // Проверка: строка содержит достаточно букв (не мусор от Tesseract)
 function _isGarbageLine(s){
   const letters=s.replace(/[^a-zA-ZА-Яа-яёЁÄÖÜäöüßÀ-ž]/g,'').length;
@@ -2547,7 +2547,29 @@ async function scanAI(b64,mt,m){
     try{
       setStatus('AI распознаёт...');
       const prompt=m==='r'
-        ?'This is a receipt/bill photo (may be in German, Russian, Italian, French, Spanish, English or other language). Extract ALL individual purchased line items with their prices. Return ONLY valid JSON (no markdown, no explanation, no code block): {"items":[{"name":"item name in original language","price":0.00,"qty":1},...]}. Rules: qty=1 if single item, qty>1 if quantity shown on line. price=total price for that line (qty × unit price). EXCLUDE: totals, subtotals, taxes (MwSt, TVA, IVA, НДС), tips, service charges, payment method lines (VISA, cash), store address/name lines, receipt numbers, thank-you lines. Only include actual purchased products/dishes.'
+        ?`You are a receipt parser. Extract purchased items from this receipt photo.
+Receipt may be in German, Russian, Italian, French, Spanish, English or other language.
+This could be a restaurant bill, supermarket receipt, gas station receipt, etc.
+
+IMPORTANT RULES:
+- price = the monetary amount in EUR/USD/RUB etc. (a realistic purchase price, typically 0.50–500)
+- NEVER use document numbers, receipt numbers, transaction IDs, or article codes as prices (these are large integers like 6185, 12345 — not prices)
+- On gas station receipts: the product line looks like "*000001 Super 95   26,87 EUR" — price is 26.87, not the article number
+- qty=1 unless explicit quantity shown (e.g. "3x Coffee")
+- price = total for that line (qty × unit price)
+
+EXCLUDE these line types (do not include in output):
+- Totals, subtotals, grand totals (Gesamt, Total, Summe, Итого)
+- Taxes (MwSt, TVA, IVA, НДС, USt)
+- Receipt/document numbers (Beleg-Nr, Bon-Nr, Kassenbon, Rechnungsnr, Transaction ID)
+- Payment method lines (VISA, Mastercard, EC-Karte, Cash, Bar, Debit)
+- Tip, service charge, Trinkgeld
+- Store name, address, phone, website
+- Date, time, cashier name
+- Thank-you messages
+
+Return ONLY valid JSON, no markdown, no explanation:
+{"items":[{"name":"item name in original language","price":0.00,"qty":1}]}`
         :'This is a restaurant menu page (may be in any language). Extract ALL dishes/drinks with prices. Return ONLY valid JSON: {"items":[{"name":"dish name","price":0.00,"desc":"short description or empty"},...]}';
       const resp=await fetch(`${API_BASE}/api/anthropic`,{
         method:'POST',
