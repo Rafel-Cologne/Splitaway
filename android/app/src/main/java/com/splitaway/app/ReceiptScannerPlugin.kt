@@ -2,7 +2,6 @@ package com.splitaway.app
 
 import android.app.Activity
 import android.content.Intent
-import android.graphics.BitmapFactory
 import android.net.Uri
 import android.util.Log
 import com.getcapacitor.JSObject
@@ -10,41 +9,55 @@ import com.getcapacitor.Plugin
 import com.getcapacitor.PluginCall
 import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.CapacitorPlugin
-import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.documentscanner.GmsDocumentScannerOptions
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanning
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanningResult
-import com.google.mlkit.vision.text.TextRecognition
-import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.tasks.await
 import org.json.JSONArray
 import org.json.JSONObject
 
 private const val TAG = "ReceiptScannerPlugin"
 private const val REQUEST_SCAN = 9901
 
+/**
+ * ReceiptScannerPlugin — Capacitor плагин для нативного сканирования чеков.
+ *
+ * Поток:
+ * 1. JS вызывает scanReceipt()
+ * 2. Запускается ML Kit Document Scanner (автообрезка + исправление перспективы)
+ * 3. handleOnActivityResult получает JPEG URI
+ * 4. MlKitReceiptOcrEngine выполняет Text Recognition
+ * 5. ReceiptParser разбирает структуру чека
+ * 6. call.resolve(result) возвращает JSON в WebView
+ *
+ * Нет сетевых запросов. Нет платных API. Полностью локально.
+ */
 @CapacitorPlugin(name = "ReceiptScanner")
 class ReceiptScannerPlugin : Plugin() {
 
     @Volatile private var pendingCall: PluginCall? = null
 
-    private val textRecognizer by lazy {
-        TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+    // Движок OCR через интерфейс — легко заменить на FuturePaddleReceiptOcrEngine
+    private val ocrEngine: ReceiptOcrEngine by lazy {
+        MlKitReceiptOcrEngine(context)
     }
+
+    // ─────────────────────────────────────────────────────────────
+    // ШАГ 1: Запустить ML Kit Document Scanner
+    // ─────────────────────────────────────────────────────────────
 
     @PluginMethod
     fun scanReceipt(call: PluginCall) {
-        call.setKeepAlive(true)          // <-- держим call живым пока не resolve/reject
+        call.setKeepAlive(true)   // держим call живым пока activity не вернёт результат
         pendingCall = call
-        Log.d(TAG, "scanReceipt: pendingCall set, starting scanner")
+        Log.d(TAG, "scanReceipt: starting ML Kit Document Scanner [engine=${ocrEngine.engineName}]")
 
         val options = GmsDocumentScannerOptions.Builder()
-            .setScannerMode(GmsDocumentScannerOptions.SCANNER_MODE_FULL)
-            .setGalleryImportAllowed(true)
-            .setPageLimit(1)
+            .setScannerMode(GmsDocumentScannerOptions.SCANNER_MODE_FULL)  // full = crop + perspective + contrast
+            .setGalleryImportAllowed(true)   // кнопка «Из галереи» внутри сканера
+            .setPageLimit(1)                 // только один лист (чек)
             .setResultFormats(GmsDocumentScannerOptions.RESULT_FORMAT_JPEG)
             .build()
 
@@ -69,9 +82,13 @@ class ReceiptScannerPlugin : Plugin() {
             }
     }
 
+    // ─────────────────────────────────────────────────────────────
+    // ШАГ 2: Получить результат от Document Scanner
+    // ─────────────────────────────────────────────────────────────
+
     override fun handleOnActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.handleOnActivityResult(requestCode, resultCode, data)
-        Log.d(TAG, "handleOnActivityResult: req=$requestCode res=$resultCode pendingCall=${pendingCall != null}")
+        Log.d(TAG, "handleOnActivityResult: req=$requestCode res=$resultCode call=${pendingCall != null}")
 
         if (requestCode != REQUEST_SCAN) return
 
@@ -82,8 +99,9 @@ class ReceiptScannerPlugin : Plugin() {
         pendingCall = null
         call.setKeepAlive(false)
 
+        // Пользователь нажал «Назад»
         if (resultCode == Activity.RESULT_CANCELED) {
-            call.reject("USER_CANCELLED", "Отменено")
+            call.reject("USER_CANCELLED", "Отменено пользователем")
             return
         }
         if (resultCode != Activity.RESULT_OK) {
@@ -92,99 +110,62 @@ class ReceiptScannerPlugin : Plugin() {
         }
 
         val pages = GmsDocumentScanningResult.fromActivityResultIntent(data)?.pages
-        Log.d(TAG, "pages count: ${pages?.size}")
+        Log.d(TAG, "Document Scanner pages: ${pages?.size}")
         if (pages.isNullOrEmpty()) {
-            call.reject("NO_PAGES", "Нет страниц")
+            call.reject("NO_PAGES", "Сканер не вернул страниц")
             return
         }
 
         val imageUri: Uri = pages[0].imageUri
-        Log.d(TAG, "imageUri: $imageUri")
+        Log.d(TAG, "Got imageUri: $imageUri")
 
+        // ШАГ 3+4+5: OCR + парсинг в фоновом потоке
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                runOcrAndParse(call, imageUri)
+                runOcrAndResolve(call, imageUri)
             } catch (e: Exception) {
-                Log.e(TAG, "Uncaught exception in OCR coroutine", e)
+                Log.e(TAG, "OCR coroutine crashed", e)
                 call.reject("OCR_CRASH", e.message ?: "unknown error")
             }
         }
     }
 
-    private suspend fun runOcrAndParse(call: PluginCall, imageUri: Uri) {
-        // 1. Декодируем bitmap
-        Log.d(TAG, "Decoding bitmap...")
-        val bitmap = context.contentResolver.openInputStream(imageUri)?.use { s ->
-            BitmapFactory.decodeStream(s)
-        }
-        if (bitmap == null) {
-            Log.e(TAG, "Bitmap decode returned null")
-            call.reject("DECODE_FAILED", "Не удалось декодировать изображение")
-            return
-        }
-        Log.d(TAG, "Bitmap decoded: ${bitmap.width}x${bitmap.height}")
+    // ─────────────────────────────────────────────────────────────
+    // ШАГИ 3-5: OCR + парсинг через движок + resolve
+    // ─────────────────────────────────────────────────────────────
 
-        // 2. ML Kit Text Recognition
-        Log.d(TAG, "Running OCR...")
-        val visionText = textRecognizer.process(InputImage.fromBitmap(bitmap, 0)).await()
-        Log.d(TAG, "OCR done, blocks=${visionText.textBlocks.size}")
-        Log.d(TAG, "=== RAW OCR TEXT ===\n${visionText.text}\n===================")
+    private suspend fun runOcrAndResolve(call: PluginCall, imageUri: Uri) {
+        // Движок сам декодирует bitmap, запускает OCR и ReceiptParser
+        val ocrResult = ocrEngine.recognize(
+            imageUri    = imageUri,
+            imageWidth  = 0,   // будет определено из bitmap
+            imageHeight = 0
+        )
 
-        // 3. Собираем блоки
-        val blocks = JSONArray()
-        for (block in visionText.textBlocks) {
-            val linesArr = JSONArray()
-            for (line in block.lines) {
-                val lb = line.boundingBox
-                linesArr.put(JSONObject().apply {
-                    put("text",       line.text)
-                    put("left",       lb?.left   ?: 0)
-                    put("top",        lb?.top    ?: 0)
-                    put("right",      lb?.right  ?: bitmap.width)
-                    put("bottom",     lb?.bottom ?: 0)
-                    put("confidence", line.confidence?.toDouble() ?: 0.9)
-                    put("elements",   JSONArray())
-                })
-            }
-            val bb = block.boundingBox
-            blocks.put(JSONObject().apply {
-                put("text",   block.text)
-                put("left",   bb?.left   ?: 0)
-                put("top",    bb?.top    ?: 0)
-                put("right",  bb?.right  ?: bitmap.width)
-                put("bottom", bb?.bottom ?: 0)
-                put("lines",  linesArr)
-            })
-        }
-
-        // 4. Парсим чек
-        val imgW = bitmap.width
-        val imgH = bitmap.height
-        Log.d(TAG, "Parsing receipt...")
-        val parsed = ReceiptParser.parse(blocks, imgW, imgH)
-        Log.d(TAG, "Parsed: $parsed")
-
-        bitmap.recycle()
-
-        // 5. Формируем ответ
-        val resultJs = safeJsonToJSObject(parsed)
+        // Преобразуем JSONObject → JSObject (безопасно, с null-guard)
+        val resultJs = safeJsonToJSObject(ocrResult.parsedResult)
 
         val ret = JSObject()
         ret.put("success",     true)
         ret.put("imageUri",    imageUri.toString())
-        ret.put("imageWidth",  imgW)
-        ret.put("imageHeight", imgH)
-        ret.put("rawText",     visionText.text)
+        ret.put("imageWidth",  ocrResult.imageWidth)
+        ret.put("imageHeight", ocrResult.imageHeight)
+        ret.put("rawText",     ocrResult.rawText)
         ret.put("result",      resultJs)
+        ret.put("engine",      ocrEngine.engineName)
 
-        Log.d(TAG, "Calling call.resolve()")
+        Log.d(TAG, "Resolving call with result: total=${ocrResult.parsedResult.opt("total")}")
         call.resolve(ret)
-        Log.d(TAG, "call.resolve() done")
     }
 
+    // ─────────────────────────────────────────────────────────────
+    // ВСПОМОГАТЕЛЬНОЕ: JSONObject → JSObject (null-safe)
+    // ─────────────────────────────────────────────────────────────
+
     /**
-     * Конвертирует JSONObject в JSObject, заменяя null → JSObject.NULL-safe строки.
-     * JSObject(string) иногда падает на JSONObject с null-значениями.
+     * Конвертирует JSONObject в JSObject рекурсивно.
+     * JSObject(string) иногда крашится на JSONObject с null-значениями,
+     * поэтому обходим вручную.
      */
     private fun safeJsonToJSObject(json: JSONObject): JSObject {
         val js = JSObject()
@@ -194,7 +175,7 @@ class ReceiptScannerPlugin : Plugin() {
             when (val v = json.opt(key)) {
                 null, JSONObject.NULL -> js.put(key, JSObject.NULL)
                 is JSONObject        -> js.put(key, safeJsonToJSObject(v))
-                is JSONArray         -> js.put(key, v)   // массивы передаём как есть
+                is JSONArray         -> js.put(key, v)
                 is Boolean           -> js.put(key, v)
                 is Int               -> js.put(key, v)
                 is Long              -> js.put(key, v)
@@ -205,7 +186,11 @@ class ReceiptScannerPlugin : Plugin() {
         return js
     }
 
+    // ─────────────────────────────────────────────────────────────
+    // LIFECYCLE
+    // ─────────────────────────────────────────────────────────────
+
     override fun handleOnDestroy() {
-        textRecognizer.close()
+        ocrEngine.close()
     }
 }

@@ -1076,12 +1076,12 @@ function launch(){
   document.getElementById('app-trip-name').textContent=S.trip.name;
   document.getElementById('app-trip-sub').textContent=(S.trip.dest||S.trip.id)+' · '+S.members.length+' уч.';
   document.getElementById('ae-date').value=today();
-  renderAll();lucide.createIcons();
+  renderAll();window.lucide&&lucide.createIcons();
   if(typeof USE_SUPABASE!=='undefined'&&USE_SUPABASE) startRealtime();
 }
 function renderAll(){
   renderDash();renderExpenses();renderBalances();renderTreasury();renderSettings();
-  renderAEModal();lucide.createIcons()
+  renderAEModal();window.lucide&&lucide.createIcons()
 }
 
 // =======================================================
@@ -1138,7 +1138,7 @@ function renderDash(){
     :'<div class="emp" style="padding:14px"><div class="emp-ic">🧾</div><div class="emp-t">Нет расходов</div></div>';
 
   renderMembersList();
-  lucide.createIcons()
+  window.lucide&&lucide.createIcons()
 }
 function toggleMyBal(){
   const el=document.getElementById('d-mybal');
@@ -1214,7 +1214,7 @@ function renderMembersList(){
       </div>`);
   });
   document.getElementById('d-members').innerHTML=items.join('');
-  lucide.createIcons()
+  window.lucide&&lucide.createIcons()
 }
 
 function memberLastAction(name){
@@ -1294,7 +1294,7 @@ function showMemberDetail(name){
       ${histHtml}
     </div>
   `;
-  openModal('m-member-detail');lucide.createIcons();
+  openModal('m-member-detail');window.lucide&&lucide.createIcons();
 }
 
 // =======================================================
@@ -1352,7 +1352,7 @@ function renderExpenses(){
     html+=`<div style="padding:5px 13px;font-size:0.73rem;color:var(--t3)">Без даты</div><div style="display:flex;flex-direction:column;gap:8px">${noDate.map(e=>expRow(e)).join('')}</div>`;
   }
   el.innerHTML=html;
-  lucide.createIcons()
+  window.lucide&&lucide.createIcons()
 }
 function toggleExpGroup(gid){
   const el=document.getElementById(gid);
@@ -1416,7 +1416,7 @@ function showExpDetail(id){
     </div>`:''}
     ${canEdit?`<button class="btn btn-d btn-fw" onclick="delExp('${e.id}')"><i data-lucide="trash-2" style="width:13px;height:13px"></i> Удалить расход</button>`:''}
   `;
-  openModal('m-exp-detail');lucide.createIcons()
+  openModal('m-exp-detail');window.lucide&&lucide.createIcons()
 }
 
 function delExp(id){
@@ -1656,7 +1656,7 @@ function renderBalances(){
     }
     el.innerHTML=html;
   }
-  lucide.createIcons()
+  window.lucide&&lucide.createIcons()
 }
 
 function settleDebt(from, to, amount){
@@ -1730,7 +1730,7 @@ function showDebtDetail(fromName, toName, totalAmt){
     ${!lines.length?`<div class="emp" style="padding:20px"><div class="emp-t">Нет прямых операций</div><div class="emp-s">Долг возник после оптимизации расчётов</div></div>`:''}
   `;
   document.getElementById('m-debt-detail-content').innerHTML=html;
-  openModal('m-debt-detail');lucide.createIcons()
+  openModal('m-debt-detail');window.lucide&&lucide.createIcons()
 }
 
 function showPersonDetail(name){
@@ -1770,7 +1770,7 @@ function showPersonDetail(name){
     </div>
   `;
   document.getElementById('m-debt-detail-content').innerHTML=html;
-  openModal('m-debt-detail');lucide.createIcons()
+  openModal('m-debt-detail');window.lucide&&lucide.createIcons()
 }
 
 // =======================================================
@@ -1880,7 +1880,7 @@ function renderTreasury(){
           ${canDel?`<button class="btn btn-g btn-sm btn-ic" onclick="deleteContrib(${idx})" title="Удалить"><i data-lucide="trash-2" style="width:11px;height:11px"></i></button>`:''}
         </div>`;
       }).reverse().join('');
-      lucide.createIcons();
+      window.lucide&&lucide.createIcons();
     }
   }
 
@@ -1888,7 +1888,7 @@ function renderTreasury(){
   document.getElementById('cash-exp').innerHTML=tExp.length
     ?[...tExp].reverse().map(e=>expRow(e)).join('')
     :'<div class="emp" style="padding:24px"><div class="emp-ic">💳</div><div class="emp-t">Нет списаний</div></div>';
-  lucide.createIcons()
+  window.lucide&&lucide.createIcons()
 }
 function openAddCash(){
   document.getElementById('ac-amt').value='';
@@ -1900,7 +1900,7 @@ function openAddCash(){
         <span style="color:${ac(m.name)};font-weight:600">${m.name}</span>
       </div>`).join('');
   }
-  openModal('m-add-cash');lucide.createIcons()
+  openModal('m-add-cash');window.lucide&&lucide.createIcons()
 }
 function selContributor(el,name){
   document.querySelectorAll('[data-contributor]').forEach(b=>b.classList.remove('on'));
@@ -1941,7 +1941,7 @@ function openHolderPicker(){
       <button class="btn btn-p btn-fw" onclick="saveHolder()">Сохранить</button>
       ${current?`<button class="btn btn-g btn-sm" onclick="clearHolder()">Сбросить</button>`:''}
     </div>`;
-  openModal('m-debt-detail');lucide.createIcons();
+  openModal('m-debt-detail');window.lucide&&lucide.createIcons();
 }
 function setHolder(name,el){
   document.querySelectorAll('#holder-picker [data-holder]').forEach(b=>b.classList.remove('on'));
@@ -1980,7 +1980,7 @@ function openMyOrder(){
       <span style="color:${ac(m.name)};font-weight:600">${m.name}</span>
     </div>`;
   }).join('');
-  openModal('m-my-order');lucide.createIcons();
+  openModal('m-my-order');window.lucide&&lucide.createIcons();
 }
 
 function selMoPerson(el,name){
@@ -2060,7 +2060,7 @@ Text:\n${t}`}]})
   }).join('')+treasury;
 
   document.getElementById('mo-result').style.display='flex';
-  lucide.createIcons();
+  window.lucide&&lucide.createIcons();
 }
 
 function removeMoItem(idx){
@@ -2074,7 +2074,7 @@ function removeMoItem(idx){
       <div style="font-family:var(--mono);font-weight:600;font-size:0.88rem">${fm(it.price)} €</div>
       <button onclick="removeMoItem(${i})" style="border:none;background:none;color:var(--t3);cursor:pointer;padding:2px"><i data-lucide="x" style="width:12px;height:12px"></i></button>
     </div>`).join('');
-  lucide.createIcons();
+  window.lucide&&lucide.createIcons();
 }
 
 function saveMyOrder(){
@@ -2102,7 +2102,7 @@ function saveMyOrder(){
 
 function openEditCashList(){
   renderEditCashModal();
-  openModal('m-edit-cash');lucide.createIcons();
+  openModal('m-edit-cash');window.lucide&&lucide.createIcons();
 }
 function renderEditCashModal(){
   const contribs=S.treasury.contributions||[];
@@ -2120,7 +2120,7 @@ function renderEditCashModal(){
         style="width:90px;text-align:right;font-family:var(--mono);font-weight:700;padding:5px 8px;font-size:0.9rem">
       <button class="btn btn-g btn-sm btn-ic" onclick="deleteContrib(${i})" style="color:var(--red)"><i data-lucide="trash-2" style="width:13px;height:13px"></i></button>
     </div>`).join('');
-  lucide.createIcons();
+  window.lucide&&lucide.createIcons();
 }
 function deleteContrib(idx){
   if(!confirm('Удалить этот взнос?'))return;
@@ -2168,7 +2168,7 @@ function renderSettings(){
   renderSettingMembers();
   renderSettingGroups();
   renderArchive();
-  lucide.createIcons();
+  window.lucide&&lucide.createIcons();
 }
 
 function renderArchive(){
@@ -2197,7 +2197,7 @@ function renderArchive(){
       </div>
     </div>`;
   }).join('');
-  lucide.createIcons();
+  window.lucide&&lucide.createIcons();
 }
 
 function renderSettingMembers(){
@@ -2238,7 +2238,7 @@ function renderSettingMembers(){
       </div>`
     }).join('')
   }
-  lucide.createIcons()
+  window.lucide&&lucide.createIcons()
 }
 
 function openColorPicker(name){
@@ -2262,7 +2262,7 @@ function openColorPicker(name){
       <button class="btn btn-p btn-fw" onclick="applyColor('${name}')">Применить</button>
       ${current?`<button class="btn btn-g btn-sm" onclick="resetColor('${name}')">Сбросить</button>`:''}
     </div>`;
-  openModal('m-debt-detail');lucide.createIcons();
+  openModal('m-debt-detail');window.lucide&&lucide.createIcons();
 }
 function pickColor(name,color){
   document.getElementById('cp-custom').value=color;
@@ -2303,7 +2303,7 @@ function toggleMemberAdmin(name){
     S.coAdmins.push(name);
     toast('🛡️ '+name+' теперь Админ');
   }
-  save();renderSettingMembers();renderMembersList();lucide.createIcons();
+  save();renderSettingMembers();renderMembersList();window.lucide&&lucide.createIcons();
 }
 
 function openRenameMember(name){
@@ -3019,7 +3019,7 @@ function renderScanItems(){
     </div>`;
   }).join('');
   updateReceiptSummary();
-  lucide.createIcons();
+  window.lucide&&lucide.createIcons();
 }
 
 function assignItem(i,name){
@@ -3157,7 +3157,7 @@ function renderMenuPicker(){
       <span style="color:${ac(m.name)};font-weight:600">${m.name}</span>
     </div>`;
   }).join('');
-  updMenuTotals();lucide.createIcons()
+  updMenuTotals();window.lucide&&lucide.createIcons()
 }
 function setMenuPerson(name){S.scan.menuPerson=name;renderMenuPicker()}
 function setMenuPaidBy(name){S.scan.menuPaidBy=name;renderMenuPicker()}
@@ -3259,7 +3259,7 @@ async function openQR(){
       hint.innerHTML='✅ QR-код и ссылка рабочие — участники смогут присоединиться.';
     }
   }
-  openModal('m-qr');lucide.createIcons();
+  openModal('m-qr');window.lucide&&lucide.createIcons();
 }
 
 
@@ -3301,7 +3301,7 @@ function toggleTheme(){
   if(tBtn)tBtn.innerHTML=t==='light'
     ?'<i data-lucide="moon" style="width:16px;height:16px"></i> Тёмная тема'
     :'<i data-lucide="sun" style="width:16px;height:16px"></i> Светлая тема';
-  lucide.createIcons();
+  window.lucide&&lucide.createIcons();
 }
 
 // =======================================================
@@ -3707,7 +3707,7 @@ if('serviceWorker' in navigator){
 // INIT
 // =======================================================
 function init(){
-  lucide.createIcons();
+  window.lucide&&lucide.createIcons();
 
   // Восстанавливаем тему (если явно выбрана, иначе — системная через CSS media query)
   const savedTheme=localStorage.getItem('sw_theme');
@@ -3795,4 +3795,19 @@ function init(){
       try{
         const u=new URL(data.url);
         const tc=u.searchParams.get('trip');
- 
+        const tok=u.searchParams.get('token');
+        if(tc){
+          if(tok)window._pendingInviteToken=tok;
+          showOb('ob-s1');
+          document.getElementById('ob-code').value=tc.toUpperCase();
+          joinTrip();
+        }
+      }catch(e){console.warn('[Cap] appUrlOpen parse error:',e)}
+    });
+  }
+}
+// Запускаем после загрузки всех defer-скриптов (в т.ч. lucide)
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
