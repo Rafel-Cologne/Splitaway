@@ -27,3 +27,6 @@
       "icons": [{ "src": "icons/icon-96.png", "sizes": "96x96" }]
     }
   ],
+  "prefer_related_applications": false,
+  "screenshots": []
+}

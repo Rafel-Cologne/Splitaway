@@ -10,11 +10,12 @@
 <title>Splitaway</title>
 <link rel="manifest" href="/manifest.json">
 <link rel="apple-touch-icon" href="/icons/icon-192.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<!-- lucide: локальная копия — работает офлайн и в APK без CDN -->
+<!-- lucide v0.474.0 — локальная копия, ISC License, работает офлайн и в APK -->
 <script defer src="/js/lucide.js"></script>
-<!-- qrcodejs и tesseract.js: загружаются динамически по требованию (см. loadQRCode/loadTesseract) -->
+<!-- qrcodejs2 v0.0.2 — локальная копия, MIT License -->
+<script src="/js/qrcode.min.js"></script>
+<!-- supabase-js v2.99.1 — локальная копия, MIT License -->
+<script src="/js/supabase.js"></script>
 <script src="/js/sb-config.js"></script>
 <script src="/js/sb-client.js"></script>
 <style>
@@ -28,7 +29,7 @@
   --amber:#f59e0b;--amglow:rgba(245,158,11,0.18);
   --text:#f0f0f8;--t2:rgba(240,240,248,0.52);--t3:rgba(240,240,248,0.28);
   --r:18px;--rsm:12px;--rxs:8px;
-  --font:'Sora',sans-serif;--mono:'DM Mono',monospace;
+  --font:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;--mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;
   --nh:72px;--sb:env(safe-area-inset-bottom,0px);
 }
 [data-theme=light]{
@@ -896,33 +897,22 @@ async function sha256hex(text){
   const buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text));
   return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
 }
-// Динамическая загрузка QRCode (только при открытии QR-окна)
-let _qrLoading=null;
+// QRCode v0.0.2 загружается статически из /js/qrcode.min.js (MIT License, davidshimjs)
 function loadQRCode(){
   if(typeof QRCode!=='undefined')return Promise.resolve();
-  if(_qrLoading)return _qrLoading;
-  _qrLoading=new Promise((res,rej)=>{
-    const s=document.createElement('script');
-    s.src='https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js';
-    s.onload=()=>{_qrLoading=null;res();};
-    s.onerror=()=>rej(new Error('QRCode load failed'));
-    document.head.appendChild(s);
-  });
-  return _qrLoading;
+  return Promise.reject(new Error('QRCode library not loaded — check /js/qrcode.min.js'));
 }
-// Динамическая загрузка Tesseract.js (только как fallback OCR)
-let _tessLoading=null;
-function loadTesseract(){
-  if(typeof Tesseract!=='undefined')return Promise.resolve();
-  if(_tessLoading)return _tessLoading;
-  _tessLoading=new Promise((res,rej)=>{
-    const s=document.createElement('script');
-    s.src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
-    s.onload=()=>{_tessLoading=null;res();};
-    s.onerror=()=>rej(new Error('Tesseract load failed'));
-    document.head.appendChild(s);
-  });
-  return _tessLoading;
+// Безопасная инициализация иконок Lucide — не падает при сбое отдельной иконки
+function initializeIcons(root){
+  if(!window.lucide||typeof window.lucide.createIcons!=='function'){
+    console.warn('[Lucide] library unavailable');return false;
+  }
+  try{
+    window.lucide.createIcons({attrs:{'aria-hidden':'true',focusable:'false'},root:root||document});
+    return true;
+  }catch(e){
+    console.error('[Lucide] createIcons failed',e);return false;
+  }
 }
 function toast(msg){const w=document.getElementById('tw');const t=document.createElement('div');t.className='toast';t.textContent=msg;w.appendChild(t);setTimeout(()=>t.remove(),3100)}
 function openModal(id){document.getElementById(id).classList.add('open');document.body.style.overflow='hidden'}
@@ -1086,12 +1076,12 @@ function launch(){
   document.getElementById('app-trip-name').textContent=S.trip.name;
   document.getElementById('app-trip-sub').textContent=(S.trip.dest||S.trip.id)+' · '+S.members.length+' уч.';
   document.getElementById('ae-date').value=today();
-  renderAll();window.lucide&&lucide.createIcons();
+  renderAll();initializeIcons();
   if(typeof USE_SUPABASE!=='undefined'&&USE_SUPABASE) startRealtime();
 }
 function renderAll(){
   renderDash();renderExpenses();renderBalances();renderTreasury();renderSettings();
-  renderAEModal();window.lucide&&lucide.createIcons()
+  renderAEModal();initializeIcons()
 }
 
 // =======================================================
@@ -1148,7 +1138,7 @@ function renderDash(){
     :'<div class="emp" style="padding:14px"><div class="emp-ic">🧾</div><div class="emp-t">Нет расходов</div></div>';
 
   renderMembersList();
-  window.lucide&&lucide.createIcons()
+  initializeIcons()
 }
 function toggleMyBal(){
   const el=document.getElementById('d-mybal');
@@ -1224,7 +1214,7 @@ function renderMembersList(){
       </div>`);
   });
   document.getElementById('d-members').innerHTML=items.join('');
-  window.lucide&&lucide.createIcons()
+  initializeIcons()
 }
 
 function memberLastAction(name){
@@ -1304,7 +1294,7 @@ function showMemberDetail(name){
       ${histHtml}
     </div>
   `;
-  openModal('m-member-detail');window.lucide&&lucide.createIcons();
+  openModal('m-member-detail');initializeIcons();
 }
 
 // =======================================================
@@ -1362,7 +1352,7 @@ function renderExpenses(){
     html+=`<div style="padding:5px 13px;font-size:0.73rem;color:var(--t3)">Без даты</div><div style="display:flex;flex-direction:column;gap:8px">${noDate.map(e=>expRow(e)).join('')}</div>`;
   }
   el.innerHTML=html;
-  window.lucide&&lucide.createIcons()
+  initializeIcons()
 }
 function toggleExpGroup(gid){
   const el=document.getElementById(gid);
@@ -1426,7 +1416,7 @@ function showExpDetail(id){
     </div>`:''}
     ${canEdit?`<button class="btn btn-d btn-fw" onclick="delExp('${e.id}')"><i data-lucide="trash-2" style="width:13px;height:13px"></i> Удалить расход</button>`:''}
   `;
-  openModal('m-exp-detail');window.lucide&&lucide.createIcons()
+  openModal('m-exp-detail');initializeIcons()
 }
 
 function delExp(id){
@@ -1666,7 +1656,7 @@ function renderBalances(){
     }
     el.innerHTML=html;
   }
-  window.lucide&&lucide.createIcons()
+  initializeIcons()
 }
 
 function settleDebt(from, to, amount){
@@ -1740,7 +1730,7 @@ function showDebtDetail(fromName, toName, totalAmt){
     ${!lines.length?`<div class="emp" style="padding:20px"><div class="emp-t">Нет прямых операций</div><div class="emp-s">Долг возник после оптимизации расчётов</div></div>`:''}
   `;
   document.getElementById('m-debt-detail-content').innerHTML=html;
-  openModal('m-debt-detail');window.lucide&&lucide.createIcons()
+  openModal('m-debt-detail');initializeIcons()
 }
 
 function showPersonDetail(name){
@@ -1780,7 +1770,7 @@ function showPersonDetail(name){
     </div>
   `;
   document.getElementById('m-debt-detail-content').innerHTML=html;
-  openModal('m-debt-detail');window.lucide&&lucide.createIcons()
+  openModal('m-debt-detail');initializeIcons()
 }
 
 // =======================================================
@@ -1890,7 +1880,7 @@ function renderTreasury(){
           ${canDel?`<button class="btn btn-g btn-sm btn-ic" onclick="deleteContrib(${idx})" title="Удалить"><i data-lucide="trash-2" style="width:11px;height:11px"></i></button>`:''}
         </div>`;
       }).reverse().join('');
-      window.lucide&&lucide.createIcons();
+      initializeIcons();
     }
   }
 
@@ -1898,7 +1888,7 @@ function renderTreasury(){
   document.getElementById('cash-exp').innerHTML=tExp.length
     ?[...tExp].reverse().map(e=>expRow(e)).join('')
     :'<div class="emp" style="padding:24px"><div class="emp-ic">💳</div><div class="emp-t">Нет списаний</div></div>';
-  window.lucide&&lucide.createIcons()
+  initializeIcons()
 }
 function openAddCash(){
   document.getElementById('ac-amt').value='';
@@ -1910,7 +1900,7 @@ function openAddCash(){
         <span style="color:${ac(m.name)};font-weight:600">${m.name}</span>
       </div>`).join('');
   }
-  openModal('m-add-cash');window.lucide&&lucide.createIcons()
+  openModal('m-add-cash');initializeIcons()
 }
 function selContributor(el,name){
   document.querySelectorAll('[data-contributor]').forEach(b=>b.classList.remove('on'));
@@ -1951,7 +1941,7 @@ function openHolderPicker(){
       <button class="btn btn-p btn-fw" onclick="saveHolder()">Сохранить</button>
       ${current?`<button class="btn btn-g btn-sm" onclick="clearHolder()">Сбросить</button>`:''}
     </div>`;
-  openModal('m-debt-detail');window.lucide&&lucide.createIcons();
+  openModal('m-debt-detail');initializeIcons();
 }
 function setHolder(name,el){
   document.querySelectorAll('#holder-picker [data-holder]').forEach(b=>b.classList.remove('on'));
@@ -1990,7 +1980,7 @@ function openMyOrder(){
       <span style="color:${ac(m.name)};font-weight:600">${m.name}</span>
     </div>`;
   }).join('');
-  openModal('m-my-order');window.lucide&&lucide.createIcons();
+  openModal('m-my-order');initializeIcons();
 }
 
 function selMoPerson(el,name){
@@ -2070,7 +2060,7 @@ Text:\n${t}`}]})
   }).join('')+treasury;
 
   document.getElementById('mo-result').style.display='flex';
-  window.lucide&&lucide.createIcons();
+  initializeIcons();
 }
 
 function removeMoItem(idx){
@@ -2084,7 +2074,7 @@ function removeMoItem(idx){
       <div style="font-family:var(--mono);font-weight:600;font-size:0.88rem">${fm(it.price)} €</div>
       <button onclick="removeMoItem(${i})" style="border:none;background:none;color:var(--t3);cursor:pointer;padding:2px"><i data-lucide="x" style="width:12px;height:12px"></i></button>
     </div>`).join('');
-  window.lucide&&lucide.createIcons();
+  initializeIcons();
 }
 
 function saveMyOrder(){
@@ -2112,7 +2102,7 @@ function saveMyOrder(){
 
 function openEditCashList(){
   renderEditCashModal();
-  openModal('m-edit-cash');window.lucide&&lucide.createIcons();
+  openModal('m-edit-cash');initializeIcons();
 }
 function renderEditCashModal(){
   const contribs=S.treasury.contributions||[];
@@ -2130,7 +2120,7 @@ function renderEditCashModal(){
         style="width:90px;text-align:right;font-family:var(--mono);font-weight:700;padding:5px 8px;font-size:0.9rem">
       <button class="btn btn-g btn-sm btn-ic" onclick="deleteContrib(${i})" style="color:var(--red)"><i data-lucide="trash-2" style="width:13px;height:13px"></i></button>
     </div>`).join('');
-  window.lucide&&lucide.createIcons();
+  initializeIcons();
 }
 function deleteContrib(idx){
   if(!confirm('Удалить этот взнос?'))return;
@@ -2178,7 +2168,7 @@ function renderSettings(){
   renderSettingMembers();
   renderSettingGroups();
   renderArchive();
-  window.lucide&&lucide.createIcons();
+  initializeIcons();
 }
 
 function renderArchive(){
@@ -2207,7 +2197,7 @@ function renderArchive(){
       </div>
     </div>`;
   }).join('');
-  window.lucide&&lucide.createIcons();
+  initializeIcons();
 }
 
 function renderSettingMembers(){
@@ -2248,7 +2238,7 @@ function renderSettingMembers(){
       </div>`
     }).join('')
   }
-  window.lucide&&lucide.createIcons()
+  initializeIcons()
 }
 
 function openColorPicker(name){
@@ -2272,7 +2262,7 @@ function openColorPicker(name){
       <button class="btn btn-p btn-fw" onclick="applyColor('${name}')">Применить</button>
       ${current?`<button class="btn btn-g btn-sm" onclick="resetColor('${name}')">Сбросить</button>`:''}
     </div>`;
-  openModal('m-debt-detail');window.lucide&&lucide.createIcons();
+  openModal('m-debt-detail');initializeIcons();
 }
 function pickColor(name,color){
   document.getElementById('cp-custom').value=color;
@@ -2313,7 +2303,7 @@ function toggleMemberAdmin(name){
     S.coAdmins.push(name);
     toast('🛡️ '+name+' теперь Админ');
   }
-  save();renderSettingMembers();renderMembersList();window.lucide&&lucide.createIcons();
+  save();renderSettingMembers();renderMembersList();initializeIcons();
 }
 
 function openRenameMember(name){
@@ -2742,7 +2732,7 @@ async function toB64(file,maxPx=1200){
 }
 // Слова-стоп для итогов/налогов чека (многоязычные)
 const RECEIPT_SKIP=/^(итого|total|gesamt|summe|tax|ндс|mwst|ust|service|tip|trinkgeld|subtotal|zwischensumme|к оплате|сдача|change|cash|visa|master|kreditkarte|rechnung|danke|vielen|bon|umsatz|netto|brutto|rabatt|discount|coupon|void|storno|beleg|bon-nr|kassennr|kassen|terminal|bel\.nr|rechnungs|quittung|tankstelle|zapfs|zahlung|debit|kredit|ec-karte|paywave|contactless|transaktion|genehmigung|autorisierung)/i;
-// Проверка: строка содержит достаточно букв (не мусор от Tesseract)
+// Проверка: строка содержит достаточно букв (фильтр мусорных строк)
 function _isGarbageLine(s){
   const letters=s.replace(/[^a-zA-ZА-Яа-яёЁÄÖÜäöüßÀ-ž]/g,'').length;
   const total=s.replace(/\s/g,'').length;
@@ -2927,45 +2917,14 @@ Return ONLY valid JSON:
       return;
     }catch(e){
       console.warn('[AI] Claude Vision failed:',e.message);
-      toast('⚠️ AI недоступен — результат может быть неточным');
-      setStatus('Резервный OCR...');
+      toast('⚠️ AI недоступен');
+      setStatus('Ошибка');
     }
   }
-
-  // Попытка 2: Tesseract.js (загружается динамически только здесь)
-  try{
-    setStatus('Загрузка Tesseract...');
-    await loadTesseract();
-    setStatus('Загрузка словаря...');
-    const dataUrl=`data:${mt};base64,${b64}`;
-    const result=await Tesseract.recognize(dataUrl,'eng+deu',{
-      logger:info=>{
-        if(info.status==='recognizing text'){
-          setStatus(`Распознаём... ${Math.round((info.progress||0)*100)}%`);
-        }
-      }
-    });
-    const rawText=result.data.text||'';
-    console.log('[Tesseract] Raw:\n'+rawText);
-    const items=parseReceiptText(rawText);
-    S.scan.items=items;
-    ld.style.display='none';
-    if(m==='r'){
-      showParsed('Позиции чека','receipt');
-      if(!items.length)toast('⚠️ Не найдено. Добавьте вручную или введите текст');
-    } else {
-      showMenuPicker();
-    }
-  }catch(e){
-    console.error('[OCR]',e);
-    ld.style.display='none';
-    S.scan.items=[];
-    if(m==='r')showParsed('Позиции чека','receipt');
-    else showMenuPicker();
-    toast('❌ Ошибка — введите текст вручную');
-  }
+  ld.style.display='none';
+  S.scan.items=[];
+  showMenuPicker();
 }
-// parseText removed — replaced by nativeScanReceipt
 
 function escHtml(s){return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
 
@@ -3059,7 +3018,7 @@ function renderScanItems(){
     </div>`;
   }).join('');
   updateReceiptSummary();
-  window.lucide&&lucide.createIcons();
+  initializeIcons();
 }
 
 function assignItem(i,name){
@@ -3197,7 +3156,7 @@ function renderMenuPicker(){
       <span style="color:${ac(m.name)};font-weight:600">${m.name}</span>
     </div>`;
   }).join('');
-  updMenuTotals();window.lucide&&lucide.createIcons()
+  updMenuTotals();initializeIcons()
 }
 function setMenuPerson(name){S.scan.menuPerson=name;renderMenuPicker()}
 function setMenuPaidBy(name){S.scan.menuPaidBy=name;renderMenuPicker()}
@@ -3299,7 +3258,7 @@ async function openQR(){
       hint.innerHTML='✅ QR-код и ссылка рабочие — участники смогут присоединиться.';
     }
   }
-  openModal('m-qr');window.lucide&&lucide.createIcons();
+  openModal('m-qr');initializeIcons();
 }
 
 
@@ -3341,7 +3300,7 @@ function toggleTheme(){
   if(tBtn)tBtn.innerHTML=t==='light'
     ?'<i data-lucide="moon" style="width:16px;height:16px"></i> Тёмная тема'
     :'<i data-lucide="sun" style="width:16px;height:16px"></i> Светлая тема';
-  window.lucide&&lucide.createIcons();
+  initializeIcons();
 }
 
 // =======================================================
@@ -3747,7 +3706,7 @@ if('serviceWorker' in navigator){
 // INIT
 // =======================================================
 function init(){
-  window.lucide&&lucide.createIcons();
+  initializeIcons();
 
   // Восстанавливаем тему (если явно выбрана, иначе — системная через CSS media query)
   const savedTheme=localStorage.getItem('sw_theme');

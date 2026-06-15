@@ -10,11 +10,12 @@
 <title>Splitaway</title>
 <link rel="manifest" href="/manifest.json">
 <link rel="apple-touch-icon" href="/icons/icon-192.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<!-- lucide: defer — не блокирует парсинг, загружается параллельно -->
-<script defer src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
-<!-- qrcodejs и tesseract.js: загружаются динамически по требованию (см. loadQRCode/loadTesseract) -->
+<!-- lucide v0.474.0 — локальная копия, ISC License, работает офлайн и в APK -->
+<script defer src="/js/lucide.js"></script>
+<!-- qrcodejs2 v0.0.2 — локальная копия, MIT License -->
+<script src="/js/qrcode.min.js"></script>
+<!-- supabase-js v2.99.1 — локальная копия, MIT License -->
+<script src="/js/supabase.js"></script>
 <script src="/js/sb-config.js"></script>
 <script src="/js/sb-client.js"></script>
 <style>
@@ -28,7 +29,7 @@
   --amber:#f59e0b;--amglow:rgba(245,158,11,0.18);
   --text:#f0f0f8;--t2:rgba(240,240,248,0.52);--t3:rgba(240,240,248,0.28);
   --r:18px;--rsm:12px;--rxs:8px;
-  --font:'Sora',sans-serif;--mono:'DM Mono',monospace;
+  --font:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;--mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;
   --nh:72px;--sb:env(safe-area-inset-bottom,0px);
 }
 [data-theme=light]{
@@ -458,12 +459,12 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
         <!-- Две кнопки: камера и галерея -->
         <div style="display:flex;gap:10px">
           <button class="btn btn-p" style="flex:1;gap:8px;padding:14px 10px;flex-direction:column;height:auto"
-            onclick="document.getElementById('sc-file-r-cam').click()">
+            onclick="startReceiptScan('camera')">
             <i data-lucide="camera" style="width:26px;height:26px"></i>
             <span style="font-size:0.8rem">Снять фото</span>
           </button>
           <button class="btn btn-g" style="flex:1;gap:8px;padding:14px 10px;flex-direction:column;height:auto"
-            onclick="document.getElementById('sc-file-r').click()"
+            onclick="startReceiptScan('gallery')"
             ondragover="event.preventDefault();this.style.borderColor='var(--accent)'"
             ondragleave="this.style.borderColor=''"
             ondrop="handleDrop(event,'r');this.style.borderColor=''">
@@ -471,12 +472,41 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
             <span style="font-size:0.8rem">Из галереи</span>
           </button>
         </div>
-        <!-- Камера (capture=environment — задняя камера) -->
+        <!-- Веб-fallback file inputs (используются только вне Android) -->
         <input type="file" id="sc-file-r-cam" accept="image/*" capture="environment" style="display:none" onchange="handleFile(event,'r')">
-        <!-- Галерея -->
         <input type="file" id="sc-file-r" accept="image/*" style="display:none" onchange="handleFile(event,'r')">
-        <div id="sc-prev-r" style="display:none"><img id="sc-img-r" style="width:100%;border-radius:var(--rsm);max-height:240px;object-fit:contain;background:var(--s1)"></div>
-        <div id="sc-ld-r" class="ld" style="display:none"><div class="spin"></div><span id="sc-ld-r-txt">Распознаём чек...</span></div>
+        <div id="sc-prev-r" style="display:none">
+          <img id="sc-img-r" style="width:100%;border-radius:var(--rsm);max-height:240px;object-fit:contain;background:var(--s1)">
+          <div style="display:flex;gap:8px;margin-top:8px">
+            <button class="btn btn-g btn-sm" style="flex:1" onclick="startReceiptScan('camera')">
+              <i data-lucide="camera" style="width:14px;height:14px"></i> Переснять
+            </button>
+            <button class="btn btn-g btn-sm" style="flex:1" onclick="startReceiptScan('gallery')">
+              <i data-lucide="image" style="width:14px;height:14px"></i> Другое фото
+            </button>
+          </div>
+        </div>
+        <!-- Loader + статус прогресса -->
+        <div id="sc-ld-r" class="ld" style="display:none"><div class="spin"></div><span id="sc-ld-r-txt">Подготовка...</span></div>
+        <!-- OCR error UI: сканер недоступен или зависание -->
+        <div id="sc-ocr-error-ui" style="display:none;flex-direction:column;gap:10px;padding:14px;background:rgba(255,95,110,0.07);border:1px solid rgba(255,95,110,0.2);border-radius:var(--rsm)">
+          <div id="sc-ocr-error-msg" style="font-size:0.88rem;color:var(--text)">Не удалось распознать чек.</div>
+          <div style="font-size:0.82rem;color:var(--t2)">Попробуйте ещё раз или добавьте расход вручную.</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-p btn-sm" style="flex:1" onclick="document.getElementById('sc-ocr-error-ui').style.display='none';startReceiptScan('camera')">Повторить</button>
+            <button class="btn btn-g btn-sm" style="flex:1" onclick="document.getElementById('sc-ocr-error-ui').style.display='none';startReceiptScan('gallery')">Другое фото</button>
+            <button class="btn btn-g btn-sm" style="flex:1" onclick="document.getElementById('sc-ocr-error-ui').style.display='none';showParsed('Ручной ввод','receipt')">Ввести вручную</button>
+          </div>
+        </div>
+        <!-- Fallback UI: итог найден, позиции нет -->
+        <div id="sc-fallback-ui" style="display:none;flex-direction:column;gap:10px;padding:14px;background:rgba(108,99,255,0.07);border:1px solid rgba(108,99,255,0.2);border-radius:var(--rsm)">
+          <div id="sc-fallback-msg" style="font-size:0.88rem;color:var(--text)"></div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-p btn-sm" style="flex:1" onclick="addFallbackAsOneItem()">Добавить одной суммой</button>
+            <button class="btn btn-g btn-sm" style="flex:1" onclick="hideFallback();showParsed('Позиции чека','receipt')">Вручную</button>
+            <button class="btn btn-g btn-sm" style="flex:1" onclick="hideFallback();startReceiptScan('camera')">Пересканировать</button>
+          </div>
+        </div>
       </div>
       <!-- Menu -->
       <div class="sec" id="sc-menu" style="display:none">
@@ -566,6 +596,14 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
           <span class="bdg bdg-p" id="set-archive-cnt"></span>
         </div>
         <div id="set-archive" style="display:flex;flex-direction:column;gap:7px"></div>
+      </div>
+      <!-- Export -->
+      <div class="sec">
+        <div class="sec-hd"><span class="sec-ttl">Экспорт</span></div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-s btn-fw" onclick="exportTrip('text')"><i data-lucide="clipboard-copy" style="width:14px;height:14px"></i> Текст</button>
+          <button class="btn btn-s btn-fw" onclick="exportTrip('csv')"><i data-lucide="table" style="width:14px;height:14px"></i> CSV</button>
+        </div>
       </div>
       <!-- Theme -->
       <div class="sec">
@@ -859,33 +897,22 @@ async function sha256hex(text){
   const buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text));
   return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
 }
-// Динамическая загрузка QRCode (только при открытии QR-окна)
-let _qrLoading=null;
+// QRCode v0.0.2 загружается статически из /js/qrcode.min.js (MIT License, davidshimjs)
 function loadQRCode(){
   if(typeof QRCode!=='undefined')return Promise.resolve();
-  if(_qrLoading)return _qrLoading;
-  _qrLoading=new Promise((res,rej)=>{
-    const s=document.createElement('script');
-    s.src='https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js';
-    s.onload=()=>{_qrLoading=null;res();};
-    s.onerror=()=>rej(new Error('QRCode load failed'));
-    document.head.appendChild(s);
-  });
-  return _qrLoading;
+  return Promise.reject(new Error('QRCode library not loaded — check /js/qrcode.min.js'));
 }
-// Динамическая загрузка Tesseract.js (только как fallback OCR)
-let _tessLoading=null;
-function loadTesseract(){
-  if(typeof Tesseract!=='undefined')return Promise.resolve();
-  if(_tessLoading)return _tessLoading;
-  _tessLoading=new Promise((res,rej)=>{
-    const s=document.createElement('script');
-    s.src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
-    s.onload=()=>{_tessLoading=null;res();};
-    s.onerror=()=>rej(new Error('Tesseract load failed'));
-    document.head.appendChild(s);
-  });
-  return _tessLoading;
+// Безопасная инициализация иконок Lucide — не падает при сбое отдельной иконки
+function initializeIcons(root){
+  if(!window.lucide||typeof window.lucide.createIcons!=='function'){
+    console.warn('[Lucide] library unavailable');return false;
+  }
+  try{
+    window.lucide.createIcons({attrs:{'aria-hidden':'true',focusable:'false'},root:root||document});
+    return true;
+  }catch(e){
+    console.error('[Lucide] createIcons failed',e);return false;
+  }
 }
 function toast(msg){const w=document.getElementById('tw');const t=document.createElement('div');t.className='toast';t.textContent=msg;w.appendChild(t);setTimeout(()=>t.remove(),3100)}
 function openModal(id){document.getElementById(id).classList.add('open');document.body.style.overflow='hidden'}
@@ -1049,12 +1076,12 @@ function launch(){
   document.getElementById('app-trip-name').textContent=S.trip.name;
   document.getElementById('app-trip-sub').textContent=(S.trip.dest||S.trip.id)+' · '+S.members.length+' уч.';
   document.getElementById('ae-date').value=today();
-  renderAll();lucide.createIcons();
+  renderAll();initializeIcons();
   if(typeof USE_SUPABASE!=='undefined'&&USE_SUPABASE) startRealtime();
 }
 function renderAll(){
   renderDash();renderExpenses();renderBalances();renderTreasury();renderSettings();
-  renderAEModal();lucide.createIcons()
+  renderAEModal();initializeIcons()
 }
 
 // =======================================================
@@ -1111,7 +1138,7 @@ function renderDash(){
     :'<div class="emp" style="padding:14px"><div class="emp-ic">🧾</div><div class="emp-t">Нет расходов</div></div>';
 
   renderMembersList();
-  lucide.createIcons()
+  initializeIcons()
 }
 function toggleMyBal(){
   const el=document.getElementById('d-mybal');
@@ -1187,7 +1214,7 @@ function renderMembersList(){
       </div>`);
   });
   document.getElementById('d-members').innerHTML=items.join('');
-  lucide.createIcons()
+  initializeIcons()
 }
 
 function memberLastAction(name){
@@ -1267,7 +1294,7 @@ function showMemberDetail(name){
       ${histHtml}
     </div>
   `;
-  openModal('m-member-detail');lucide.createIcons();
+  openModal('m-member-detail');initializeIcons();
 }
 
 // =======================================================
@@ -1325,7 +1352,7 @@ function renderExpenses(){
     html+=`<div style="padding:5px 13px;font-size:0.73rem;color:var(--t3)">Без даты</div><div style="display:flex;flex-direction:column;gap:8px">${noDate.map(e=>expRow(e)).join('')}</div>`;
   }
   el.innerHTML=html;
-  lucide.createIcons()
+  initializeIcons()
 }
 function toggleExpGroup(gid){
   const el=document.getElementById(gid);
@@ -1389,7 +1416,7 @@ function showExpDetail(id){
     </div>`:''}
     ${canEdit?`<button class="btn btn-d btn-fw" onclick="delExp('${e.id}')"><i data-lucide="trash-2" style="width:13px;height:13px"></i> Удалить расход</button>`:''}
   `;
-  openModal('m-exp-detail');lucide.createIcons()
+  openModal('m-exp-detail');initializeIcons()
 }
 
 function delExp(id){
@@ -1629,7 +1656,7 @@ function renderBalances(){
     }
     el.innerHTML=html;
   }
-  lucide.createIcons()
+  initializeIcons()
 }
 
 function settleDebt(from, to, amount){
@@ -1703,7 +1730,7 @@ function showDebtDetail(fromName, toName, totalAmt){
     ${!lines.length?`<div class="emp" style="padding:20px"><div class="emp-t">Нет прямых операций</div><div class="emp-s">Долг возник после оптимизации расчётов</div></div>`:''}
   `;
   document.getElementById('m-debt-detail-content').innerHTML=html;
-  openModal('m-debt-detail');lucide.createIcons()
+  openModal('m-debt-detail');initializeIcons()
 }
 
 function showPersonDetail(name){
@@ -1743,7 +1770,7 @@ function showPersonDetail(name){
     </div>
   `;
   document.getElementById('m-debt-detail-content').innerHTML=html;
-  openModal('m-debt-detail');lucide.createIcons()
+  openModal('m-debt-detail');initializeIcons()
 }
 
 // =======================================================
@@ -1853,7 +1880,7 @@ function renderTreasury(){
           ${canDel?`<button class="btn btn-g btn-sm btn-ic" onclick="deleteContrib(${idx})" title="Удалить"><i data-lucide="trash-2" style="width:11px;height:11px"></i></button>`:''}
         </div>`;
       }).reverse().join('');
-      lucide.createIcons();
+      initializeIcons();
     }
   }
 
@@ -1861,7 +1888,7 @@ function renderTreasury(){
   document.getElementById('cash-exp').innerHTML=tExp.length
     ?[...tExp].reverse().map(e=>expRow(e)).join('')
     :'<div class="emp" style="padding:24px"><div class="emp-ic">💳</div><div class="emp-t">Нет списаний</div></div>';
-  lucide.createIcons()
+  initializeIcons()
 }
 function openAddCash(){
   document.getElementById('ac-amt').value='';
@@ -1873,7 +1900,7 @@ function openAddCash(){
         <span style="color:${ac(m.name)};font-weight:600">${m.name}</span>
       </div>`).join('');
   }
-  openModal('m-add-cash');lucide.createIcons()
+  openModal('m-add-cash');initializeIcons()
 }
 function selContributor(el,name){
   document.querySelectorAll('[data-contributor]').forEach(b=>b.classList.remove('on'));
@@ -1914,7 +1941,7 @@ function openHolderPicker(){
       <button class="btn btn-p btn-fw" onclick="saveHolder()">Сохранить</button>
       ${current?`<button class="btn btn-g btn-sm" onclick="clearHolder()">Сбросить</button>`:''}
     </div>`;
-  openModal('m-debt-detail');lucide.createIcons();
+  openModal('m-debt-detail');initializeIcons();
 }
 function setHolder(name,el){
   document.querySelectorAll('#holder-picker [data-holder]').forEach(b=>b.classList.remove('on'));
@@ -1953,7 +1980,7 @@ function openMyOrder(){
       <span style="color:${ac(m.name)};font-weight:600">${m.name}</span>
     </div>`;
   }).join('');
-  openModal('m-my-order');lucide.createIcons();
+  openModal('m-my-order');initializeIcons();
 }
 
 function selMoPerson(el,name){
@@ -2033,7 +2060,7 @@ Text:\n${t}`}]})
   }).join('')+treasury;
 
   document.getElementById('mo-result').style.display='flex';
-  lucide.createIcons();
+  initializeIcons();
 }
 
 function removeMoItem(idx){
@@ -2047,7 +2074,7 @@ function removeMoItem(idx){
       <div style="font-family:var(--mono);font-weight:600;font-size:0.88rem">${fm(it.price)} €</div>
       <button onclick="removeMoItem(${i})" style="border:none;background:none;color:var(--t3);cursor:pointer;padding:2px"><i data-lucide="x" style="width:12px;height:12px"></i></button>
     </div>`).join('');
-  lucide.createIcons();
+  initializeIcons();
 }
 
 function saveMyOrder(){
@@ -2075,7 +2102,7 @@ function saveMyOrder(){
 
 function openEditCashList(){
   renderEditCashModal();
-  openModal('m-edit-cash');lucide.createIcons();
+  openModal('m-edit-cash');initializeIcons();
 }
 function renderEditCashModal(){
   const contribs=S.treasury.contributions||[];
@@ -2093,7 +2120,7 @@ function renderEditCashModal(){
         style="width:90px;text-align:right;font-family:var(--mono);font-weight:700;padding:5px 8px;font-size:0.9rem">
       <button class="btn btn-g btn-sm btn-ic" onclick="deleteContrib(${i})" style="color:var(--red)"><i data-lucide="trash-2" style="width:13px;height:13px"></i></button>
     </div>`).join('');
-  lucide.createIcons();
+  initializeIcons();
 }
 function deleteContrib(idx){
   if(!confirm('Удалить этот взнос?'))return;
@@ -2141,7 +2168,7 @@ function renderSettings(){
   renderSettingMembers();
   renderSettingGroups();
   renderArchive();
-  lucide.createIcons();
+  initializeIcons();
 }
 
 function renderArchive(){
@@ -2170,7 +2197,7 @@ function renderArchive(){
       </div>
     </div>`;
   }).join('');
-  lucide.createIcons();
+  initializeIcons();
 }
 
 function renderSettingMembers(){
@@ -2211,7 +2238,7 @@ function renderSettingMembers(){
       </div>`
     }).join('')
   }
-  lucide.createIcons()
+  initializeIcons()
 }
 
 function openColorPicker(name){
@@ -2235,7 +2262,7 @@ function openColorPicker(name){
       <button class="btn btn-p btn-fw" onclick="applyColor('${name}')">Применить</button>
       ${current?`<button class="btn btn-g btn-sm" onclick="resetColor('${name}')">Сбросить</button>`:''}
     </div>`;
-  openModal('m-debt-detail');lucide.createIcons();
+  openModal('m-debt-detail');initializeIcons();
 }
 function pickColor(name,color){
   document.getElementById('cp-custom').value=color;
@@ -2276,7 +2303,7 @@ function toggleMemberAdmin(name){
     S.coAdmins.push(name);
     toast('🛡️ '+name+' теперь Админ');
   }
-  save();renderSettingMembers();renderMembersList();lucide.createIcons();
+  save();renderSettingMembers();renderMembersList();initializeIcons();
 }
 
 function openRenameMember(name){
@@ -2365,6 +2392,74 @@ function saveTripSettings(){
   save();toast('✅ Поездка обновлена')
 }
 
+// =======================================================
+// ЭКСПОРТ РАСХОДОВ
+// =======================================================
+function exportTrip(fmt) {
+  if (!S.trip || !S.expenses.length) { toast('⚠️ Нет расходов для экспорта'); return; }
+  const bal = calcBal();
+  const debts = simplify(bal);
+  const tripName = S.trip.name || 'Поездка';
+  const dest = S.trip.dest || '';
+
+  if (fmt === 'csv') {
+    const rows = [
+      ['Дата', 'Название', 'Сумма (€)', 'Оплатил', 'Участники', 'Комментарий'],
+      ...S.expenses.map(e => [
+        e.date || '',
+        e.name,
+        fm(e.amount),
+        e.paidBy,
+        (e.participants || []).join('; '),
+        e.comment || ''
+      ])
+    ];
+    const csv = rows.map(r => r.map(c => '"' + String(c).replace(/"/g, '""') + '"').join(',')).join('\n');
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }); // BOM for Excel
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = tripName.replace(/\s+/g, '_') + '_расходы.csv';
+    a.click(); URL.revokeObjectURL(url);
+    toast('✅ CSV сохранён');
+    return;
+  }
+
+  // Текстовый формат
+  const total = S.expenses.reduce((s, e) => s + e.amount, 0);
+  const lines = [
+    `✈️ ${tripName}${dest ? ' — ' + dest : ''}`,
+    `Участники: ${S.members.map(m => m.name).join(', ')}`,
+    `Всего расходов: ${fm(total)} €`,
+    '',
+    '── РАСХОДЫ ──',
+    ...S.expenses.map(e =>
+      `${e.date ? fdate(e.date) + ' ' : ''}${e.name}: ${fm(e.amount)} € (${e.paidBy})`
+    ),
+    '',
+    '── ДОЛГИ ──',
+    ...(debts.length
+      ? debts.map(d => `${d.from} → ${d.to}: ${fm(d.amount)} €`)
+      : ['Все расквитаны ✅'])
+  ];
+  const text = lines.join('\n');
+
+  if (navigator.share) {
+    navigator.share({ title: tripName, text }).catch(() => {});
+    return;
+  }
+  navigator.clipboard.writeText(text)
+    .then(() => toast('✅ Скопировано в буфер обмена'))
+    .catch(() => {
+      // Fallback: скачать как .txt
+      const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = tripName.replace(/\s+/g, '_') + '_расходы.txt';
+      a.click(); URL.revokeObjectURL(url);
+      toast('✅ Файл сохранён');
+    });
+}
+
 async function deleteTrip(){
   if(!S.isAdmin){toast('❌ Только Админ');return}
   if(!confirm(`Удалить поездку "${S.trip?.name}"? Это действие нельзя отменить.`))return;
@@ -2413,15 +2508,196 @@ function scanTab(tab,btn){
   document.getElementById('sc-menu').style.display=tab==='menu'?'flex':'none';
   S.scan.mode=tab;
 }
+// ── Точка входа: нажатие «Снять фото» / «Из галереи» ──────────
+// На Android: запускает нативный ML Kit Document Scanner.
+// На вебе: открывает стандартный file picker (fallback).
+async function startReceiptScan(source) {
+  if (window.Capacitor?.isNativePlatform?.()) {
+    await nativeScanReceipt();
+  } else {
+    // Веб-fallback: обычный file input
+    if (source === 'camera') {
+      document.getElementById('sc-file-r-cam').click();
+    } else {
+      document.getElementById('sc-file-r').click();
+    }
+  }
+}
+
+// ── Нативный путь: ML Kit Document Scanner → Text Recognition → ReceiptParser ──
+async function nativeScanReceipt() {
+  const ld     = document.getElementById('sc-ld-r');
+  const ldTxt  = document.getElementById('sc-ld-r-txt');
+  const errUi  = document.getElementById('sc-ocr-error-ui');
+  const errMsg = document.getElementById('sc-ocr-error-msg');
+  const setStatus = msg => { if (ldTxt) ldTxt.textContent = msg; };
+
+  // Сбрасываем предыдущий error UI
+  if (errUi) errUi.style.display = 'none';
+  ld.style.display = 'flex';
+  setStatus('Подготовка сканера...');
+
+  // Таймаут 35 секунд — если нативный стек завис, разблокируем UI
+  const TIMEOUT_MS = 35_000;
+  let _timeoutId;
+  const timeoutPromise = new Promise((_, rej) => {
+    _timeoutId = setTimeout(
+      () => rej(Object.assign(new Error('TIMEOUT'), { code: 'TIMEOUT' })),
+      TIMEOUT_MS
+    );
+  });
+
+  try {
+    const { ReceiptScanner } = window.Capacitor.Plugins;
+    if (!ReceiptScanner) throw Object.assign(new Error('Plugin not found'), { code: 'NO_PLUGIN' });
+
+    setStatus('Сканируем чек...');
+    // Promise.race: либо сканер ответит, либо сработает таймаут
+    const scanData = await Promise.race([ReceiptScanner.scanReceipt(), timeoutPromise]);
+    clearTimeout(_timeoutId);
+
+    if (!scanData.success) throw Object.assign(new Error('No result'), { code: 'NO_RESULT' });
+
+    setStatus('Поиск позиций...');
+    const result = scanData.result;
+
+    // Показываем превью (imageUri — content:// URI)
+    if (scanData.imageUri) {
+      const prev  = document.getElementById('sc-prev-r');
+      const imgEl = document.getElementById('sc-img-r');
+      prev.style.display = 'block';
+      // Capacitor convertFileSrc конвертирует content:// в доступный WebView URL
+      imgEl.src = window.Capacitor.convertFileSrc(scanData.imageUri);
+    }
+
+    setStatus('Проверка суммы...');
+    applyReceiptResult(result);
+    ld.style.display = 'none';
+
+  } catch (e) {
+    clearTimeout(_timeoutId);
+    ld.style.display = 'none';
+
+    const eCode = (e.code || e.errorMessage || e.message || '').toString();
+
+    // Пользователь сам закрыл сканер — молча выходим
+    if (eCode === 'USER_CANCELLED' || eCode.toLowerCase().includes('cancel')) return;
+
+    console.warn('[ReceiptScanner] failed:', eCode, e);
+
+    // Формируем понятное сообщение
+    let userMsg;
+    if (eCode === 'TIMEOUT') {
+      userMsg = 'Распознавание заняло слишком много времени. Попробуйте ещё раз.';
+    } else if (eCode === 'NO_PLUGIN') {
+      userMsg = 'Сканер недоступен на этом устройстве.';
+    } else if (eCode.includes('OOM') || eCode.includes('OutOfMemory')) {
+      userMsg = 'Изображение слишком большое. Попробуйте другое фото.';
+    } else {
+      userMsg = `Не удалось распознать чек (${eCode}).`;
+    }
+
+    // Показываем error UI с кнопками — не оставляем пользователя в тупике
+    if (errMsg) errMsg.textContent = userMsg;
+    if (errUi)  errUi.style.display = 'flex';
+  }
+}
+
+// ── Применить результат парсинга (одинаково для нативного и веб пути) ──
+function applyReceiptResult(result) {
+  const warnings = result.warnings || [];
+
+  S.scan.items = (result.items || []).map(it => ({
+    name:        it.name || '',
+    price:       it.totalPrice || 0,
+    qty:         it.quantity || 1,
+    needsReview: it.needsReview || !it.name || it.confidence < 0.7,
+    confidence:  it.confidence || 0,
+    rawText:     it.rawText || '',
+    assignments: {}
+  }));
+
+  S.scan.receiptMeta = {
+    provider: result.provider,
+    merchant: result.merchant,
+    date:     result.date,
+    total:    result.total,
+    currency: result.currency || 'EUR'
+  };
+
+  // Предупреждение о расхождении суммы
+  warnings.forEach(w => {
+    if (w.code === 'TOTAL_MISMATCH') {
+      toast(`⚠️ Сумма позиций ${fm(w.calculated)}€ ≠ итог чека ${fm(w.expected)}€ — проверьте`);
+    }
+  });
+
+  // Авто-заполнить дату и магазин
+  if (result.date) {
+    const dateEl = document.getElementById('sc-exp-date');
+    if (dateEl) {
+      // Конвертируем немецкий формат DD.MM.YYYY → YYYY-MM-DD для input[type=date]
+      const dParts = result.date.match(/(\d{2})[./](\d{2})[./](\d{2,4})/);
+      if (dParts) {
+        const yr = dParts[3].length === 2 ? '20' + dParts[3] : dParts[3];
+        dateEl.value = `${yr}-${dParts[2]}-${dParts[1]}`;
+      }
+    }
+  }
+  if (result.merchant) {
+    const nameEl = document.getElementById('sc-exp-name');
+    if (nameEl && !nameEl.value) nameEl.value = result.merchant;
+  }
+
+  // Проверка NO_ITEMS_FOUND_TOTAL_KNOWN → показать fallback UI
+  const noItemsWarning = warnings.find(w => w.code === 'NO_ITEMS_FOUND_TOTAL_KNOWN');
+  if (noItemsWarning && S.scan.items.length === 0) {
+    showFallbackUI(noItemsWarning.total);
+    return;
+  }
+
+  showParsed('Позиции чека', 'receipt');
+}
+
+function showFallbackUI(total) {
+  const el  = document.getElementById('sc-fallback-ui');
+  const msg = document.getElementById('sc-fallback-msg');
+  if (!el || !msg) return;
+  msg.textContent = `Позиции не распознаны. Общая сумма найдена: ${fm(total)}€`;
+  S.scan._fallbackTotal = total;
+  el.style.display = 'flex';
+}
+
+function hideFallback() {
+  const el = document.getElementById('sc-fallback-ui');
+  if (el) el.style.display = 'none';
+}
+
+function addFallbackAsOneItem() {
+  const total = S.scan._fallbackTotal || 0;
+  S.scan.items = [{
+    name:        'Позиция чека',
+    price:       total,
+    qty:         1,
+    needsReview: true,
+    confidence:  0.5,
+    assignments: {}
+  }];
+  hideFallback();
+  showParsed('Позиции чека', 'receipt');
+}
+
 async function handleFile(ev,m){
   const file=ev.target.files[0];if(!file)return;
   const prev=document.getElementById(m==='r'?'sc-prev-r':'sc-prev-m');
-  const img=document.getElementById(m==='r'?'sc-img-r':'sc-img-m');
-  prev.style.display='block';img.src=URL.createObjectURL(file);
+  const imgEl=document.getElementById(m==='r'?'sc-img-r':'sc-img-m');
+  prev.style.display='block';imgEl.src=URL.createObjectURL(file);
   const ld=document.getElementById(m==='r'?'sc-ld-r':'sc-ld-m');
   ld.style.display='flex';
-  try{const b64=await toB64(file);await scanAI(b64,file.type,m)}
-  catch(e){ld.style.display='none';toast('❌ Ошибка. Попробуйте текст.')}
+  try{
+    const {b64,mt}=await toB64(file);
+    await scanAI(b64,mt,m);
+  }catch(e){ld.style.display='none';toast('❌ Ошибка. Попробуйте текст.')}
 }
 function handleDrop(ev,m){
   ev.preventDefault();
@@ -2432,9 +2708,43 @@ function handleDrop(ev,m){
     handleFile({target:{files:[file]}},m);
   }
 }
-async function toB64(f){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(',')[1]);r.onerror=rej;r.readAsDataURL(f)})}
+// toB64: сжимает изображение до max 1200px через Canvas, всегда JPEG quality 0.88
+// Это критически важно для Netlify Function (лимит тела ~6МБ) и таймаута 10с.
+// Samsung S908B снимает ~50МПикс (15МБ) → после resize ~150КБ → base64 ~200КБ
+async function toB64(file,maxPx=1200){
+  return new Promise((res,rej)=>{
+    const img=new Image();
+    const objUrl=URL.createObjectURL(file);
+    img.onload=()=>{
+      URL.revokeObjectURL(objUrl);
+      const scale=Math.min(1,maxPx/Math.max(img.naturalWidth,img.naturalHeight));
+      const w=Math.round(img.naturalWidth*scale);
+      const h=Math.round(img.naturalHeight*scale);
+      const canvas=document.createElement('canvas');
+      canvas.width=w;canvas.height=h;
+      canvas.getContext('2d').drawImage(img,0,0,w,h);
+      const dataUrl=canvas.toDataURL('image/jpeg',0.88);
+      res({b64:dataUrl.split(',')[1],mt:'image/jpeg'});
+    };
+    img.onerror=()=>{URL.revokeObjectURL(objUrl);rej(new Error('Image load failed'))};
+    img.src=objUrl;
+  });
+}
 // Слова-стоп для итогов/налогов чека (многоязычные)
-const RECEIPT_SKIP=/^(итого|total|gesamt|summe|tax|ндс|mwst|ust|service|tip|trinkgeld|subtotal|zwischensumme|к оплате|сдача|change|cash|visa|master|kreditkarte|rechnung|danke|vielen|bon|umsatz|netto|brutto|rabatt|discount|coupon|void|storno)/i;
+const RECEIPT_SKIP=/^(итого|total|gesamt|summe|tax|ндс|mwst|ust|service|tip|trinkgeld|subtotal|zwischensumme|к оплате|сдача|change|cash|visa|master|kreditkarte|rechnung|danke|vielen|bon|umsatz|netto|brutto|rabatt|discount|coupon|void|storno|beleg|bon-nr|kassennr|kassen|terminal|bel\.nr|rechnungs|quittung|tankstelle|zapfs|zahlung|debit|kredit|ec-karte|paywave|contactless|transaktion|genehmigung|autorisierung)/i;
+// Проверка: строка содержит достаточно букв (фильтр мусорных строк)
+function _isGarbageLine(s){
+  const letters=s.replace(/[^a-zA-ZА-Яа-яёЁÄÖÜäöüßÀ-ž]/g,'').length;
+  const total=s.replace(/\s/g,'').length;
+  if(total<2)return true;
+  // Если меньше 20% букв — мусор (e.g. "% ke os." или "A © S O")
+  if(letters/total<0.20)return true;
+  // Если имя целиком из одиночных символов разделённых пробелами — мусор
+  const words=s.trim().split(/\s+/);
+  const singleCharWords=words.filter(w=>w.length===1).length;
+  if(words.length>=3&&singleCharWords/words.length>0.5)return true;
+  return false;
+}
 
 function parseReceiptText(raw){
   const items=[];
@@ -2481,7 +2791,8 @@ function parseReceiptText(raw){
 
     name=name.replace(/[.,\-:*–—]+$/,'').trim();
     if(!name||name.length<2)continue;
-    if(typeof RECEIPT_SKIP!=='undefined'&&RECEIPT_SKIP&&RECEIPT_SKIP.test(name))continue;
+    if(RECEIPT_SKIP.test(name))continue;
+    if(_isGarbageLine(name))continue;
     if(price<=0||price>9999)continue;
     name=name.charAt(0).toUpperCase()+name.slice(1);
     items.push({name,price,qty});
@@ -2495,18 +2806,88 @@ async function scanAI(b64,mt,m){
   ld.style.display='flex';
   const setStatus=(msg)=>{if(ldTxt)ldTxt.textContent=msg;};
 
-  // Попытка 1: Claude Vision API (через backend-прокси /api/anthropic)
+  // ── Попытка 1: /api/receipts/analyze (Azure DI → Claude каскад на сервере) ──
+  if(m==='r'){
+    try{
+      setStatus('Распознаём чек...');
+      const resp=await fetch(`${API_BASE}/api/receipts/analyze`,{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({image:b64,mediaType:mt})
+      });
+      const result=await resp.json();
+      if(result.error&&!result.items?.length)throw new Error(result.error);
+
+      // Маппинг нормализованного ответа → S.scan.items
+      S.scan.items=(result.items||[]).map(it=>({
+        name:      it.name||'',
+        price:     it.totalPrice||0,
+        qty:       it.quantity||1,
+        needsReview: it.needsReview||(it.confidence<0.55)||!it.name,
+        confidence:it.confidence||0,
+        rawText:   it.rawText||'',
+        assignments:{}
+      }));
+
+      // Сохранить метаданные чека
+      S.scan.receiptMeta={
+        provider:  result.provider,
+        merchant:  result.merchant,
+        date:      result.date,
+        total:     result.total,
+        currency:  result.currency||'EUR'
+      };
+
+      // Предупреждение о расхождении суммы
+      (result.warnings||[]).forEach(w=>{
+        if(w.code==='TOTAL_MISMATCH'){
+          toast(`⚠️ Сумма позиций ${fm(w.calculated)}€ ≠ итог чека ${fm(w.expected)}€ — проверьте`);
+        }
+      });
+
+      // Авто-подставить дату из чека
+      if(result.date){
+        const dateEl=document.getElementById('sc-exp-date');
+        if(dateEl)dateEl.value=result.date;
+      }
+      // Авто-подставить название магазина
+      if(result.merchant){
+        const nameEl=document.getElementById('sc-exp-name');
+        if(nameEl&&!nameEl.value)nameEl.value=result.merchant;
+      }
+
+      ld.style.display='none';
+      showParsed('Позиции чека','receipt');
+      return;
+    }catch(e){
+      console.warn('[receipts-analyze] failed:',e.message);
+      setStatus('Резервный OCR...');
+      // НЕ показываем toast здесь — fallback ниже попробует Claude напрямую
+    }
+  }
+
+  // ── Попытка 2: Claude Vision (для меню и как fallback чека) ──
   {
     try{
       setStatus('AI распознаёт...');
       const prompt=m==='r'
-        ?'This is a receipt/bill photo (may be in German, Russian, Italian, French, Spanish, English or other language). Extract ALL individual purchased line items with their prices. Return ONLY valid JSON (no markdown, no explanation, no code block): {"items":[{"name":"item name in original language","price":0.00,"qty":1},...]}. Rules: qty=1 if single item, qty>1 if quantity shown on line. price=total price for that line (qty × unit price). EXCLUDE: totals, subtotals, taxes (MwSt, TVA, IVA, НДС), tips, service charges, payment method lines (VISA, cash), store address/name lines, receipt numbers, thank-you lines. Only include actual purchased products/dishes.'
+        ?`You are a receipt parser. Extract purchased items from this receipt photo.
+Receipt may be in German, Russian, Italian, French, Spanish, English or other language.
+
+IMPORTANT RULES:
+- price = monetary amount (realistic: 0.50–500 EUR/USD/RUB)
+- NEVER use document numbers, receipt numbers, article codes as prices
+- Gas station: "*000001 Super 95  26,87 EUR" → name="Super 95", price=26.87
+- qty=1 unless explicit quantity shown
+
+EXCLUDE: totals, taxes (MwSt/НДС/TVA), receipt numbers (Beleg-Nr), payment lines (VISA/EC), address, date, thank-you messages
+
+Return ONLY valid JSON:
+{"items":[{"name":"item name","price":0.00,"qty":1}]}`
         :'This is a restaurant menu page (may be in any language). Extract ALL dishes/drinks with prices. Return ONLY valid JSON: {"items":[{"name":"dish name","price":0.00,"desc":"short description or empty"},...]}';
       const resp=await fetch(`${API_BASE}/api/anthropic`,{
         method:'POST',
-        headers:{
-          'Content-Type':'application/json'
-        },
+        headers:{'Content-Type':'application/json'},
         body:JSON.stringify({
           model:'claude-3-5-haiku-20241022',
           max_tokens:2000,
@@ -2522,79 +2903,27 @@ async function scanAI(b64,mt,m){
       const parsed=JSON.parse(txt);
       const rawItems=parsed.items||[];
       S.scan.items=rawItems.map(it=>({
-        name:it.name||'Позиция',
+        name:it.name||'',
         price:parseFloat(it.price)||0,
         qty:parseInt(it.qty)||1,
         desc:it.desc||'',
+        needsReview:false,
+        confidence:0.70,
         assignments:{}
-      }));
+      })).filter(it=>it.price>0&&it.name);
       ld.style.display='none';
       if(m==='r'){showParsed('Позиции чека','receipt');}
       else{showMenuPicker();}
       return;
     }catch(e){
-      console.warn('[AI] Ошибка Claude Vision, пробуем Tesseract:',e.message);
-      setStatus('Tesseract резерв...');
+      console.warn('[AI] Claude Vision failed:',e.message);
+      toast('⚠️ AI недоступен');
+      setStatus('Ошибка');
     }
   }
-
-  // Попытка 2: Tesseract.js (загружается динамически только здесь)
-  try{
-    setStatus('Загрузка Tesseract...');
-    await loadTesseract();
-    setStatus('Загрузка словаря...');
-    const dataUrl=`data:${mt};base64,${b64}`;
-    const result=await Tesseract.recognize(dataUrl,'eng+deu',{
-      logger:info=>{
-        if(info.status==='recognizing text'){
-          setStatus(`Распознаём... ${Math.round((info.progress||0)*100)}%`);
-        }
-      }
-    });
-    const rawText=result.data.text||'';
-    console.log('[Tesseract] Raw:\n'+rawText);
-    const items=parseReceiptText(rawText);
-    S.scan.items=items;
-    ld.style.display='none';
-    if(m==='r'){
-      showParsed('Позиции чека','receipt');
-      if(!items.length)toast('⚠️ Не найдено. Добавьте вручную или введите текст');
-    } else {
-      showMenuPicker();
-    }
-  }catch(e){
-    console.error('[OCR]',e);
-    ld.style.display='none';
-    S.scan.items=[];
-    if(m==='r')showParsed('Позиции чека','receipt');
-    else showMenuPicker();
-    toast('❌ Ошибка — введите текст вручную');
-  }
-}
-async function parseText(){
-  const t=document.getElementById('sc-txt').value.trim();
-  if(!t){toast('⚠️ Введите текст');return}
-  // Сначала пробуем Claude через backend-прокси
-  {
-    try{
-      toast('🔄 AI разбирает текст...');
-      const r=await fetch(`${API_BASE}/api/anthropic`,{
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({model:'claude-3-5-haiku-20241022',max_tokens:1000,messages:[{role:'user',content:`Parse this receipt/bill text. Return ONLY valid JSON: {"items":[{"name":"item name","price":0.00,"qty":1},...]}. qty>1 if quantity shown. price=total for that line. Exclude totals and taxes.\n\n${t}`}]})
-      });
-      const d=await r.json();
-      if(d.error)throw new Error(d.error.message);
-      const txt=(d.content?.[0]?.text||'').replace(/```json|```/g,'').trim();
-      const parsed=JSON.parse(txt);
-      S.scan.items=(parsed.items||[]).map(it=>({name:it.name,price:parseFloat(it.price)||0,qty:parseInt(it.qty)||1,assignments:{}}));
-      showParsed('Позиции',S.scan.mode);return;
-    }catch(e){console.warn('[AI text parse]',e)}
-  }
-  // Regex парсер
-  const items=parseReceiptText(t);
-  if(items.length){S.scan.items=items;showParsed('Позиции',S.scan.mode);return}
-  toast('⚠️ Формат: "Название   12.90" — по одной позиции на строку')
+  ld.style.display='none';
+  S.scan.items=[];
+  showMenuPicker();
 }
 
 function escHtml(s){return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
@@ -2652,20 +2981,27 @@ function renderScanItems(){
         </div>`;
       }
     }).join('');
-    // Unassigned warning
+    // Unassigned warning + needsReview badge
     let warn='';
     if(qty===1&&!it.assignedTo) warn='<span style="font-size:0.67rem;color:var(--red);white-space:nowrap">⚠️</span>';
     if(qty>1){
       const assigned=Object.values(it.assignments||{}).reduce((s,v)=>s+v,0);
       if(assigned<qty)warn=`<span style="font-size:0.67rem;color:var(--amber);white-space:nowrap">⚠️ ${qty-assigned} ост.</span>`;
     }
-    return `<div style="border-bottom:1px solid var(--b1);padding:9px 0">
+    // needsReview: Azure вернул низкий confidence — просим проверить вручную
+    const reviewBorder=it.needsReview?'border-left:3px solid var(--amber);padding-left:8px;':'';
+    const reviewHint=it.needsReview
+      ?`<div style="font-size:0.67rem;color:var(--amber);margin-bottom:4px">🔍 Проверьте название и цену</div>`:'';
+    const nameDisplay=it.name||'';
+    const namePlaceholder=it.needsReview?'Название не распознано — введите вручную':'Название позиции';
+    return `<div style="border-bottom:1px solid var(--b1);padding:9px 0;${reviewBorder}">
+      ${reviewHint}
       <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
-        <input style="flex:1;background:transparent;border:none;border-bottom:1px solid var(--b2);
+        <input style="flex:1;background:transparent;border:none;border-bottom:1px solid ${it.needsReview?'var(--amber)':'var(--b2)'};
                       color:var(--text);font-size:0.84rem;padding:3px 4px;outline:none;font-family:inherit;
                       min-width:0"
-               value="${escHtml(it.name)}" oninput="S.scan.items[${i}].name=this.value"
-               placeholder="Название позиции">
+               value="${escHtml(nameDisplay)}" oninput="S.scan.items[${i}].name=this.value;S.scan.items[${i}].needsReview=false;renderScanItems()"
+               placeholder="${namePlaceholder}">
         ${qty>1?`<input class="rip" style="width:38px;flex-shrink:0;text-align:center" type="number" min="1" max="99"
                value="${qty}" title="Количество"
                oninput="S.scan.items[${i}].qty=parseInt(this.value)||1;renderScanItems()">
@@ -2682,7 +3018,7 @@ function renderScanItems(){
     </div>`;
   }).join('');
   updateReceiptSummary();
-  lucide.createIcons();
+  initializeIcons();
 }
 
 function assignItem(i,name){
@@ -2820,7 +3156,7 @@ function renderMenuPicker(){
       <span style="color:${ac(m.name)};font-weight:600">${m.name}</span>
     </div>`;
   }).join('');
-  updMenuTotals();lucide.createIcons()
+  updMenuTotals();initializeIcons()
 }
 function setMenuPerson(name){S.scan.menuPerson=name;renderMenuPicker()}
 function setMenuPaidBy(name){S.scan.menuPaidBy=name;renderMenuPicker()}
@@ -2922,7 +3258,7 @@ async function openQR(){
       hint.innerHTML='✅ QR-код и ссылка рабочие — участники смогут присоединиться.';
     }
   }
-  openModal('m-qr');lucide.createIcons();
+  openModal('m-qr');initializeIcons();
 }
 
 
@@ -2964,7 +3300,7 @@ function toggleTheme(){
   if(tBtn)tBtn.innerHTML=t==='light'
     ?'<i data-lucide="moon" style="width:16px;height:16px"></i> Тёмная тема'
     :'<i data-lucide="sun" style="width:16px;height:16px"></i> Светлая тема';
-  lucide.createIcons();
+  initializeIcons();
 }
 
 // =======================================================
@@ -3321,4 +3657,156 @@ async function registerSW(){
     const reg=await navigator.serviceWorker.register('/sw.js',{scope:'/'});
     console.log('[SW] Registered, scope:',reg.scope);
 
-    // Обновление 
+    // Обновление SW
+    reg.addEventListener('updatefound',()=>{
+      const nw=reg.installing;
+      nw.addEventListener('statechange',()=>{
+        if(nw.state==='installed'&&navigator.serviceWorker.controller){
+          showUpdateBanner();
+        }
+      });
+    });
+  }catch(e){
+    console.warn('[SW] Registration failed:',e);
+  }
+}
+
+function showUpdateBanner(){
+  const b=document.createElement('div');
+  b.style.cssText='position:fixed;top:0;left:0;right:0;z-index:999;background:var(--accent);color:#fff;padding:12px 18px;display:flex;align-items:center;justify-content:space-between;font-size:0.84rem;font-weight:600';
+  b.innerHTML='🔄 Доступно обновление Splitaway<button onclick="location.reload()" style="background:rgba(255,255,255,0.2);border:none;color:#fff;padding:5px 12px;border-radius:8px;cursor:pointer;font-weight:700">Обновить</button>';
+  document.body.prepend(b);
+}
+
+// Онлайн/офлайн индикатор
+window.addEventListener('online',()=>{
+  updateRTIndicator(true);
+  toast('🌐 Подключение восстановлено');
+  // Регистрируем Background Sync при восстановлении связи
+  if('serviceWorker' in navigator&&'SyncManager' in window){
+    navigator.serviceWorker.ready.then(reg=>reg.sync.register('sync-expenses')).catch(()=>{});
+  } else if(S.trip){
+    // Fallback: сразу синхронизируем если Background Sync не поддерживается
+    setTimeout(()=>{ if(USE_SUPABASE&&S.trip)sbSync(); },1000);
+  }
+});
+window.addEventListener('offline',()=>{updateRTIndicator(false);toast('📴 Офлайн — данные сохранены локально')});
+
+// Слушаем SW_SYNC_READY — Service Worker сигнализирует что сеть восстановлена
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.addEventListener('message', event => {
+    if(event.data?.type==='SW_SYNC_READY'&&S.trip&&USE_SUPABASE){
+      console.log('[SW→Page] Sync triggered by background sync');
+      sbSync();
+    }
+  });
+}
+
+// =======================================================
+// INIT
+// =======================================================
+function init(){
+  initializeIcons();
+
+  // Восстанавливаем тему (если явно выбрана, иначе — системная через CSS media query)
+  const savedTheme=localStorage.getItem('sw_theme');
+  if(savedTheme){document.documentElement.setAttribute('data-theme',savedTheme);}
+  // else: data-theme не ставим — CSS @media(prefers-color-scheme) сработает автоматически
+
+  // Регистрируем Service Worker
+  registerSW();
+
+  // Восстанавливаем push-состояние
+  pushEnabled=localStorage.getItem('sw_push')==='1';
+  updatePushBtn();
+
+  // URL параметры
+  const p=new URLSearchParams(location.search),tc=p.get('trip');
+  const urlToken=p.get('token'); // invite_token из ссылки-приглашения
+
+  // Quick-action из URL (?action=add-expense)
+  const action=p.get('action');
+
+  // Если в URL есть ?trip=CODE — показываем форму входа и авто-присоединяемся
+  if(tc){
+    showOb('ob-s1');
+    document.getElementById('ob-code').value=tc.toUpperCase();
+    // Передаём invite_token в joinTrip() через глобальную переменную
+    if(urlToken)window._pendingInviteToken=urlToken;
+    // Авто-присоединение после инициализации Supabase
+    setTimeout(()=>joinTrip(),600);
+    return;
+  }
+
+  // Загружаем последнюю поездку
+  const last=localStorage.getItem('sw_last');
+  if(last){
+    const raw=localStorage.getItem('sw_'+last);
+    if(raw){
+      try{
+        const d=JSON.parse(raw);
+        S.trip=d.trip;
+        S.adminName=d.adminName||'';
+        S.coAdmins=d.coAdmins||[];
+        S.members=(d.members||[]).map(m=>typeof m==='string'?{name:m,gender:'m'}:m);
+        S.groups=d.groups||[];
+        S.expenses=d.expenses||[];
+        S.treasury=d.treasury||{total:0,spent:0,contributions:[],holder:null};
+        if(!S.treasury.contributions)S.treasury.contributions=[];
+        S.receipts=d.receipts||[];
+        S.memberColors=d.memberColors||{};
+        S.settledDebts=d.settledDebts||[];
+        S.me=d.me||S.members[0]?.name||'';
+        S.meGender=d.meGender||S.members.find(m=>m.name===S.me)?.gender||'m';
+        S.isAdmin=S.me===(S.adminName||'')||(S.coAdmins||[]).includes(S.me);
+        // Восстанавливаем токены из localStorage (не хранятся в основном blob)
+        S.inviteToken=localStorage.getItem('sw_invite_'+last)||null;
+        S.adminToken=localStorage.getItem('sw_admin_'+last)||null;
+        launch(); // startRealtime() вызывается внутри launch()
+        // Обновляем из Supabase в фоне (получаем свежие данные от других)
+        if(USE_SUPABASE){
+          const me=S.me,savedAdmin=S.isAdmin,myReceipts=S.receipts||[];
+          const savedInvite=S.inviteToken,savedAdmin2=S.adminToken;
+          loadFromSupabase(S.trip.id).then(ok=>{
+            if(ok){
+              S.me=me;
+              S.meGender=S.members.find(m=>m.name===me)?.gender||'m';
+              S.isAdmin=savedAdmin;
+              S.inviteToken=savedInvite;
+              S.adminToken=savedAdmin2;
+              if(!S.receipts||!S.receipts.length)S.receipts=myReceipts;
+              renderAll();
+            }
+          }).catch(()=>{});
+        }
+        // Открыть форму добавления если пришли через shortcut
+        if(action==='add-expense')setTimeout(()=>openAddExp(),400);
+        return;
+      }catch(e){console.error('Init error:',e)}
+    }
+  }
+
+  // ---- Capacitor: обработка deep links (когда приложение уже запущено) ----
+  // window.Capacitor инжектируется нативным мостом только в APK/AAB;
+  // в браузере этот блок просто не выполняется.
+  if(window.Capacitor?.isNativePlatform?.() && window.Capacitor.Plugins?.App){
+    window.Capacitor.Plugins.App.addListener('appUrlOpen', data => {
+      try{
+        const u=new URL(data.url);
+        const tc=u.searchParams.get('trip');
+        const tok=u.searchParams.get('token');
+        if(tc){
+          if(tok)window._pendingInviteToken=tok;
+          showOb('ob-s1');
+          document.getElementById('ob-code').value=tc.toUpperCase();
+          joinTrip();
+        }
+      }catch(e){console.warn('[Cap] appUrlOpen parse error:',e)}
+    });
+  }
+}
+// Запускаем после загрузки всех defer-скриптов (в т.ч. lucide)
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>

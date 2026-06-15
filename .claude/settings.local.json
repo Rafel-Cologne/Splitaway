@@ -7,7 +7,17 @@
       "Bash(cmd.exe /c \"echo %PATH%\")",
       "Bash(tr ';' '\\\\n')",
       "Bash(echo $PATH)",
-      "Bash(\"/c/Program Files/nodejs/npm.cmd\" install)"
+      "Bash(\"/c/Program Files/nodejs/npm.cmd\" install)",
+      "Bash(grep -n \"innerHTML.*\\\\${\" public/index.html)",
+      "Bash(grep -E \"\\\\\\\\.name|\\\\\\\\.title|\\\\\\\\.merchant|it\\\\\\\\.|m\\\\\\\\.n|expense|item|receipt|c\\\\\\\\.name|g\\\\\\\\.name|member\")",
+      "Bash(grep -n \"urlsToCache\\\\|CACHE_URLS\\\\|precache\\\\|\\\\\\\\.js'\\\\|\\\\\\\\.html'\" public/sw.js)",
+      "Bash(npm install *)",
+      "Bash(grep -v \"data-lucide\\\\|//\\\\|lucide\\\\.js\")",
+      "Bash(grep -v \"initializeIcons\\\\|typeof\\\\|//\\\\|function\")",
+      "Bash(grep -v \"//\")",
+      "Bash(npx cap *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)"
     ]
   }
 }

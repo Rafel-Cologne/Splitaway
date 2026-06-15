@@ -1,33 +1,37 @@
 // ============================================================
-// Splitaway — Service Worker v2.0
+// Splitaway — Service Worker v3.0
 // Стратегии:
 //   index.html + JS → stale-while-revalidate (офлайн + свежесть)
-//   CDN (lucide, шрифты, иконки) → cache-first
-//   API (supabase, anthropic) → network-only (не кэшируем)
-// Background Sync → сообщаем странице запустить sbSync()
+//   Иконки, манифест, офлайн-страница → stale-while-revalidate
+//   API (supabase, eagle doc, anthropic) → network-only (не кэшируем)
+// v3.0: локальный lucide.js, qrcode.min.js; убран CDN-кэш; нет Google Fonts
 // ============================================================
 
-const SW_VERSION   = '2.0';
+const SW_VERSION   = '3.0';
 const CACHE_STATIC = `splitaway-static-${SW_VERSION}`;
-const CACHE_CDN    = `splitaway-cdn-${SW_VERSION}`;
 
-// Ресурсы, которые кэшируем при установке (всегда нужны офлайн)
+// Ресурсы, которые кэшируем при установке (все локальные — нет CDN)
 const PRECACHE_URLS = [
   '/',
   '/index.html',
+  '/offline.html',
   '/manifest.json',
+  '/js/lucide.js',
+  '/js/qrcode.min.js',
+  '/js/supabase.js',
   '/js/sb-config.js',
   '/js/sb-client.js',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
 ];
 
-// URL-паттерны, которые НИКОГДА не кэшируем (API, реалтайм)
+// URL-паттерны, которые НИКОГДА не кэшируем (API, реалтайм, финансовые данные)
 const SKIP_CACHE = [
   'supabase.co',
   'anthropic.com',
+  'eagledoc',
   '/api/',
-  'googleapis.com/generate',
+  'netlify/functions',
 ];
 
 // ============================================================
@@ -48,7 +52,7 @@ self.addEventListener('install', event => {
 // ============================================================
 self.addEventListener('activate', event => {
   console.log(`[SW ${SW_VERSION}] Activating...`);
-  const CURRENT = [CACHE_STATIC, CACHE_CDN];
+  const CURRENT = [CACHE_STATIC];
   event.waitUntil(
     caches.keys()
       .then(keys => Promise.all(
@@ -90,8 +94,8 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // 4. CDN (шрифты, lucide, qrcode, etc.) — cache-first
-  event.respondWith(cacheFirst(event.request, CACHE_CDN));
+  // 4. Остальные внешние запросы — только сеть (не кэшируем)
+  return;
 });
 
 // ---- Стратегия: отдать кэш немедленно + обновить в фоне ----
@@ -111,23 +115,6 @@ async function staleWhileRevalidate(request, cacheName) {
 
   // Если есть кэш — отдаём сразу; иначе ждём сети
   return cached || await fetchPromise || offlineFallback(request);
-}
-
-// ---- Стратегия: кэш-первый (для CDN) ----
-async function cacheFirst(request, cacheName) {
-  const cache = await caches.open(cacheName);
-  const cached = await cache.match(request);
-  if (cached) return cached;
-
-  try {
-    const response = await fetch(request);
-    if (response && response.ok) {
-      cache.put(request, response.clone());
-    }
-    return response;
-  } catch {
-    return new Response('Offline', { status: 503 });
-  }
 }
 
 // ---- Фолбэк при офлайне ----

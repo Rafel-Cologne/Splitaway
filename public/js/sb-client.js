@@ -25,15 +25,10 @@ async function getSupabase() {
     return null;
   }
 
-  // Загружаем Supabase SDK из CDN если ещё не загружен
+  // Supabase SDK v2.99.1 загружается статически из /js/supabase.js (MIT License)
   if (!window.supabase) {
-    await new Promise((resolve, reject) => {
-      const s = document.createElement('script');
-      s.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js';
-      s.onload = resolve;
-      s.onerror = () => reject(new Error('Не удалось загрузить Supabase SDK'));
-      document.head.appendChild(s);
-    });
+    console.error('[SB] Supabase SDK not loaded — check /js/supabase.js');
+    return null;
   }
 
   _sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
