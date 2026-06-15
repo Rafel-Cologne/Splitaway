@@ -2515,6 +2515,102 @@ function scanTab(tab,btn){
 // ── Точка входа: нажатие «Снять фото» / «Из галереи» ──────────
 // На Android: запускает нативный ML Kit Document Scanner.
 // На вебе: открывает стандартный file picker (fallback).
+// ── Receipt OCR Controller ────────────────────────────────────
+// Единственная точка входа для распознавания чеков.
+// Вызывается и с веб-пути (handleFile), и с нативного (nativeScanReceipt).
+const _receiptOcrCache = new Map(); // hash → {result, expiresAt}
+const _RECEIPT_CACHE_TTL = 30 * 60 * 1000; // 30 минут
+let _activeReceiptAbort = null;
+
+async function _hashB64(b64) {
+  const data = new TextEncoder().encode(b64);
+  const buf  = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+function setReceiptScanState(state, details) {
+  const ld     = document.getElementById('sc-ld-r');
+  const ldTxt  = document.getElementById('sc-ld-r-txt');
+  const errUi  = document.getElementById('sc-ocr-error-ui');
+  const errMsg = document.getElementById('sc-ocr-error-msg');
+  const labels = {
+    idle:            '',
+    preparing:       'Подготовка...',
+    uploading:       'Отправляем изображение...',
+    recognizing:     'Распознаём чек...',
+    parsing:         'Проверка результата...',
+    success:         'Готово',
+    partial_success: 'Частичный результат',
+    failed:          'Ошибка распознавания',
+    timeout:         'Превышено время ожидания',
+    cancelled:       ''
+  };
+  const active = ['preparing','uploading','recognizing','parsing'].includes(state);
+  if (ld)    ld.style.display    = active ? 'flex' : 'none';
+  if (ldTxt) ldTxt.textContent   = labels[state] || '';
+  if (state === 'failed' || state === 'timeout') {
+    const msg = details?.message
+      || (state === 'timeout' ? 'Распознавание заняло слишком много времени. Попробуйте ещё раз.' : 'Не удалось распознать чек.');
+    if (errMsg) errMsg.textContent = msg;
+    if (errUi)  errUi.style.display = 'flex';
+  } else {
+    if (errUi) errUi.style.display = 'none';
+  }
+}
+
+async function processReceiptImage({imageBase64, mediaType, source}) {
+  if (_activeReceiptAbort) { _activeReceiptAbort.abort(); _activeReceiptAbort = null; }
+  setReceiptScanState('preparing');
+
+  let hash;
+  try { hash = await _hashB64(imageBase64); } catch { hash = null; }
+
+  if (hash) {
+    const cached = _receiptOcrCache.get(hash);
+    if (cached && cached.expiresAt > Date.now()) {
+      setReceiptScanState('success');
+      applyReceiptResult(cached.result);
+      showParsed('Позиции чека', 'receipt');
+      return;
+    }
+  }
+
+  const controller = new AbortController();
+  _activeReceiptAbort = controller;
+  const timeoutId = setTimeout(() => controller.abort('timeout'), 45_000);
+
+  try {
+    setReceiptScanState('uploading');
+    const resp = await fetch(`${API_BASE}/api/receipts/analyze`, {
+      method:  'POST',
+      headers: {'Content-Type': 'application/json'},
+      body:    JSON.stringify({image: imageBase64, mediaType}),
+      signal:  controller.signal
+    });
+    setReceiptScanState('recognizing');
+    const result = await resp.json();
+    if (result.error && !(result.items?.length)) {
+      throw Object.assign(new Error(result.error), {code: 'API_ERROR'});
+    }
+    setReceiptScanState('parsing');
+    if (hash && result.items?.length) {
+      _receiptOcrCache.set(hash, {result, expiresAt: Date.now() + _RECEIPT_CACHE_TTL});
+    }
+    const hasItems = (result.items?.length || 0) > 0;
+    setReceiptScanState(hasItems ? 'success' : 'partial_success');
+    applyReceiptResult(result);
+    if (hasItems) showParsed('Позиции чека', 'receipt');
+  } catch (e) {
+    const isTimeout = e.name === 'AbortError' || e.message === 'timeout' || e.code === 'TIMEOUT';
+    setReceiptScanState(isTimeout ? 'timeout' : 'failed', {message: isTimeout ? undefined : e.message});
+    console.warn('[ReceiptOCR] failed:', e.message);
+  } finally {
+    clearTimeout(timeoutId);
+    if (_activeReceiptAbort === controller) _activeReceiptAbort = null;
+  }
+}
+// ─────────────────────────────────────────────────────────────
+
 async function startReceiptScan(source) {
   if (window.Capacitor?.isNativePlatform?.()) {
     await nativeScanReceipt();
@@ -2528,68 +2624,58 @@ async function startReceiptScan(source) {
   }
 }
 
-// ── Нативный путь: ML Kit Document Scanner → Text Recognition → ReceiptParser ──
+// ── Нативный путь: ML Kit Document Scanner → imageBase64 → processReceiptImage ──
 async function nativeScanReceipt() {
-  const ld     = document.getElementById('sc-ld-r');
-  const ldTxt  = document.getElementById('sc-ld-r-txt');
-  const errUi  = document.getElementById('sc-ocr-error-ui');
-  const errMsg = document.getElementById('sc-ocr-error-msg');
-  const setStatus = msg => { if (ldTxt) ldTxt.textContent = msg; };
-
-  // Сбрасываем предыдущий error UI
+  const errUi = document.getElementById('sc-ocr-error-ui');
   if (errUi) errUi.style.display = 'none';
-  ld.style.display = 'flex';
-  setStatus('Подготовка сканера...');
+  setReceiptScanState('preparing');
 
-  // Таймаут 35 секунд — если нативный стек завис, разблокируем UI
   const TIMEOUT_MS = 35_000;
   let _timeoutId;
   const timeoutPromise = new Promise((_, rej) => {
     _timeoutId = setTimeout(
-      () => rej(Object.assign(new Error('TIMEOUT'), { code: 'TIMEOUT' })),
+      () => rej(Object.assign(new Error('TIMEOUT'), {code: 'TIMEOUT'})),
       TIMEOUT_MS
     );
   });
 
   try {
-    const { ReceiptScanner } = window.Capacitor.Plugins;
-    if (!ReceiptScanner) throw Object.assign(new Error('Plugin not found'), { code: 'NO_PLUGIN' });
+    const {ReceiptScanner} = window.Capacitor.Plugins;
+    if (!ReceiptScanner) throw Object.assign(new Error('Plugin not found'), {code: 'NO_PLUGIN'});
 
-    setStatus('Сканируем чек...');
-    // Promise.race: либо сканер ответит, либо сработает таймаут
+    const ldTxt = document.getElementById('sc-ld-r-txt');
+    if (ldTxt) ldTxt.textContent = 'Сканируем чек...';
+
     const scanData = await Promise.race([ReceiptScanner.scanReceipt(), timeoutPromise]);
     clearTimeout(_timeoutId);
 
-    if (!scanData.success) throw Object.assign(new Error('No result'), { code: 'NO_RESULT' });
-
-    setStatus('Поиск позиций...');
-    const result = scanData.result;
+    if (!scanData.success) throw Object.assign(new Error('No result'), {code: 'NO_RESULT'});
 
     // Показываем превью (imageUri — content:// URI)
     if (scanData.imageUri) {
       const prev  = document.getElementById('sc-prev-r');
       const imgEl = document.getElementById('sc-img-r');
-      prev.style.display = 'block';
-      // Capacitor convertFileSrc конвертирует content:// в доступный WebView URL
-      imgEl.src = window.Capacitor.convertFileSrc(scanData.imageUri);
+      if (prev)  prev.style.display = 'block';
+      if (imgEl) imgEl.src = window.Capacitor.convertFileSrc(scanData.imageUri);
     }
 
-    setStatus('Проверка суммы...');
-    applyReceiptResult(result);
-    ld.style.display = 'none';
+    await processReceiptImage({
+      imageBase64: scanData.imageBase64,
+      mediaType:   scanData.mimeType || 'image/jpeg',
+      source:      'native'
+    });
 
   } catch (e) {
     clearTimeout(_timeoutId);
-    ld.style.display = 'none';
 
     const eCode = (e.code || e.errorMessage || e.message || '').toString();
-
-    // Пользователь сам закрыл сканер — молча выходим
-    if (eCode === 'USER_CANCELLED' || eCode.toLowerCase().includes('cancel')) return;
+    if (eCode === 'USER_CANCELLED' || eCode.toLowerCase().includes('cancel')) {
+      setReceiptScanState('cancelled');
+      return;
+    }
 
     console.warn('[ReceiptScanner] failed:', eCode, e);
 
-    // Формируем понятное сообщение
     let userMsg;
     if (eCode === 'TIMEOUT') {
       userMsg = 'Распознавание заняло слишком много времени. Попробуйте ещё раз.';
@@ -2598,12 +2684,10 @@ async function nativeScanReceipt() {
     } else if (eCode.includes('OOM') || eCode.includes('OutOfMemory')) {
       userMsg = 'Изображение слишком большое. Попробуйте другое фото.';
     } else {
-      userMsg = `Не удалось распознать чек (${eCode}).`;
+      userMsg = `Не удалось запустить сканер (${eCode}).`;
     }
 
-    // Показываем error UI с кнопками — не оставляем пользователя в тупике
-    if (errMsg) errMsg.textContent = userMsg;
-    if (errUi)  errUi.style.display = 'flex';
+    setReceiptScanState('failed', {message: userMsg});
   }
 }
 
@@ -2696,12 +2780,14 @@ async function handleFile(ev,m){
   const prev=document.getElementById(m==='r'?'sc-prev-r':'sc-prev-m');
   const imgEl=document.getElementById(m==='r'?'sc-img-r':'sc-img-m');
   prev.style.display='block';imgEl.src=URL.createObjectURL(file);
-  const ld=document.getElementById(m==='r'?'sc-ld-r':'sc-ld-m');
-  ld.style.display='flex';
   try{
     const {b64,mt}=await toB64(file);
-    await scanAI(b64,mt,m);
-  }catch(e){ld.style.display='none';toast('❌ Ошибка. Попробуйте текст.')}
+    if(m==='r'){
+      await processReceiptImage({imageBase64:b64,mediaType:mt,source:'web'});
+    }else{
+      await scanMenuImage(b64,mt);
+    }
+  }catch(e){toast('❌ Ошибка загрузки файла.');}
 }
 function handleDrop(ev,m){
   ev.preventDefault();
@@ -2734,22 +2820,18 @@ async function toB64(file,maxPx=1200){
     img.src=objUrl;
   });
 }
-// Слова-стоп для итогов/налогов чека (многоязычные)
-const RECEIPT_SKIP=/^(итого|total|gesamt|summe|tax|ндс|mwst|ust|service|tip|trinkgeld|subtotal|zwischensumme|к оплате|сдача|change|cash|visa|master|kreditkarte|rechnung|danke|vielen|bon|umsatz|netto|brutto|rabatt|discount|coupon|void|storno|beleg|bon-nr|kassennr|kassen|terminal|bel\.nr|rechnungs|quittung|tankstelle|zapfs|zahlung|debit|kredit|ec-karte|paywave|contactless|transaktion|genehmigung|autorisierung)/i;
-// Проверка: строка содержит достаточно букв (фильтр мусорных строк)
-function _isGarbageLine(s){
+// ── Парсер текста заказа (используется в parseMyOrder) ──
+const _ORDER_SKIP=/^(итого|total|gesamt|summe|tax|ндс|mwst|ust|service|tip|trinkgeld|subtotal|zwischensumme|к оплате|сдача|change|cash|visa|master|kreditkarte|rechnung|danke|vielen|bon|umsatz|netto|brutto|rabatt|discount|coupon|void|storno|beleg|bon-nr|kassennr|kassen|terminal|bel\.nr|rechnungs|quittung|tankstelle|zapfs|zahlung|debit|kredit|ec-karte|paywave|contactless|transaktion|genehmigung|autorisierung)/i;
+function _isGarbageOrderLine(s){
   const letters=s.replace(/[^a-zA-ZА-Яа-яёЁÄÖÜäöüßÀ-ž]/g,'').length;
   const total=s.replace(/\s/g,'').length;
   if(total<2)return true;
-  // Если меньше 20% букв — мусор (e.g. "% ke os." или "A © S O")
   if(letters/total<0.20)return true;
-  // Если имя целиком из одиночных символов разделённых пробелами — мусор
   const words=s.trim().split(/\s+/);
   const singleCharWords=words.filter(w=>w.length===1).length;
   if(words.length>=3&&singleCharWords/words.length>0.5)return true;
   return false;
 }
-
 function parseReceiptText(raw){
   const items=[];
   const lines=raw.split('\n');
@@ -2758,45 +2840,34 @@ function parseReceiptText(raw){
     if(!s||s.length<2)continue;
     let name='',price=0,qty=1;
     let m;
-
-    // Число: целое или дробное, запятая или точка как разделитель
     const NUM=/\d{1,5}(?:[.,]\d{1,2})?/;
     const numStr=s=>parseFloat(s.replace(',','.'));
-    // Формат 1: "2 пива по 4" или "2 пива по 4€"  (КОЛ-ВО ИМЯ по ЦЕНА/шт)
     const rePo1=new RegExp(`^(\\d+)\\s+(.{2,40}?)\\s+по\\s+(${NUM.source})\\s*[€$£]?\\s*$`,'i');
-    // Формат 2: "Пиво 2 по 4€"  (ИМЯ КОЛ-ВО по ЦЕНА/шт)
     const rePo2=new RegExp(`^(.{2,40}?)\\s+(\\d+)\\s+по\\s+(${NUM.source})\\s*[€$£]?\\s*$`,'i');
-    // Формат 3: "Пиво по 5€"  (ИМЯ по ЦЕНА — кол-во = 1)
     const rePo3=new RegExp(`^(.{2,40}?)\\s+по\\s+(${NUM.source})\\s*[€$£]?\\s*$`,'i');
-    // Формат 4: "Name за 7,50€"
     const reZa=new RegExp(`^(.{2,50}?)\\s+за\\s+(${NUM.source})\\s*[€$£]?\\s*$`,'i');
-    // Формат 5: тире "Name - 12.90"
     const reDash=new RegExp(`^(.{2,60}?)\\s*[-–—]\\s*(${NUM.source})\\s*[€$£]?\\s*$`);
-    // Формат 6: "Name   12.90" (2+ пробела)
     const reSpace=new RegExp(`^(.{2,60}?)\\s{2,}(${NUM.source})\\s*[€$£]?\\s*$`);
-    // Формат 7: "Name 12.90" или "Name 5" — последнее слово это число
     const reLast=new RegExp(`^(.{2,60}?)\\s+(${NUM.source})\\s*[€$£]?\\s*$`);
-
     if((m=s.match(rePo1))){
       qty=parseInt(m[1]);name=m[2].trim();price=numStr(m[3])*qty;
-    } else if((m=s.match(rePo2))){
+    }else if((m=s.match(rePo2))){
       name=m[1].trim();qty=parseInt(m[2]);price=numStr(m[3])*qty;
-    } else if((m=s.match(rePo3))){
+    }else if((m=s.match(rePo3))){
       name=m[1].trim();qty=1;price=numStr(m[2]);
-    } else if((m=s.match(reZa))){
+    }else if((m=s.match(reZa))){
       name=m[1].trim();price=numStr(m[2]);qty=1;
-    } else if((m=s.match(reDash))||(m=s.match(reSpace))||(m=s.match(reLast))){
+    }else if((m=s.match(reDash))||(m=s.match(reSpace))||(m=s.match(reLast))){
       name=m[1].trim().replace(/[.,\-:*–—]+$/,'').trim();
-      let rawPrice=numStr(m[2]);
+      const rawPrice=numStr(m[2]);
       const qm=name.match(/^(\d+)\s+(.{2,})$/);
       if(qm){qty=parseInt(qm[1]);name=qm[2].trim();price=rawPrice*qty;}
       else{price=rawPrice;}
-    } else continue;
-
+    }else continue;
     name=name.replace(/[.,\-:*–—]+$/,'').trim();
     if(!name||name.length<2)continue;
-    if(RECEIPT_SKIP.test(name))continue;
-    if(_isGarbageLine(name))continue;
+    if(_ORDER_SKIP.test(name))continue;
+    if(_isGarbageOrderLine(name))continue;
     if(price<=0||price>9999)continue;
     name=name.charAt(0).toUpperCase()+name.slice(1);
     items.push({name,price,qty});
@@ -2804,130 +2875,48 @@ function parseReceiptText(raw){
   return items;
 }
 
-async function scanAI(b64,mt,m){
-  const ld=document.getElementById(m==='r'?'sc-ld-r':'sc-ld-m');
-  const ldTxt=document.getElementById(m==='r'?'sc-ld-r-txt':'sc-ld-m-txt');
-  ld.style.display='flex';
-  const setStatus=(msg)=>{if(ldTxt)ldTxt.textContent=msg;};
-
-  // ── Попытка 1: /api/receipts/analyze (Azure DI → Claude каскад на сервере) ──
-  if(m==='r'){
-    try{
-      setStatus('Распознаём чек...');
-      const resp=await fetch(`${API_BASE}/api/receipts/analyze`,{
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({image:b64,mediaType:mt})
-      });
-      const result=await resp.json();
-      if(result.error&&!result.items?.length)throw new Error(result.error);
-
-      // Маппинг нормализованного ответа → S.scan.items
-      S.scan.items=(result.items||[]).map(it=>({
-        name:      it.name||'',
-        price:     it.totalPrice||0,
-        qty:       it.quantity||1,
-        needsReview: it.needsReview||(it.confidence<0.55)||!it.name,
-        confidence:it.confidence||0,
-        rawText:   it.rawText||'',
-        assignments:{}
-      }));
-
-      // Сохранить метаданные чека
-      S.scan.receiptMeta={
-        provider:  result.provider,
-        merchant:  result.merchant,
-        date:      result.date,
-        total:     result.total,
-        currency:  result.currency||'EUR'
-      };
-
-      // Предупреждение о расхождении суммы
-      (result.warnings||[]).forEach(w=>{
-        if(w.code==='TOTAL_MISMATCH'){
-          toast(`⚠️ Сумма позиций ${fm(w.calculated)}€ ≠ итог чека ${fm(w.expected)}€ — проверьте`);
-        }
-      });
-
-      // Авто-подставить дату из чека
-      if(result.date){
-        const dateEl=document.getElementById('sc-exp-date');
-        if(dateEl)dateEl.value=result.date;
-      }
-      // Авто-подставить название магазина
-      if(result.merchant){
-        const nameEl=document.getElementById('sc-exp-name');
-        if(nameEl&&!nameEl.value)nameEl.value=result.merchant;
-      }
-
-      ld.style.display='none';
-      showParsed('Позиции чека','receipt');
-      return;
-    }catch(e){
-      console.warn('[receipts-analyze] failed:',e.message);
-      setStatus('Резервный OCR...');
-      // НЕ показываем toast здесь — fallback ниже попробует Claude напрямую
-    }
+// ── Меню-путь: Claude Vision (только для меню, не для чеков) ──
+async function scanMenuImage(b64,mt){
+  const ld=document.getElementById('sc-ld-m');
+  const ldTxt=document.getElementById('sc-ld-m-txt');
+  if(ld)ld.style.display='flex';
+  const setStatus=msg=>{if(ldTxt)ldTxt.textContent=msg;};
+  try{
+    setStatus('AI распознаёт меню...');
+    const resp=await fetch(`${API_BASE}/api/anthropic`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        model:'claude-3-5-haiku-20241022',
+        max_tokens:2000,
+        messages:[{role:'user',content:[
+          {type:'image',source:{type:'base64',media_type:mt,data:b64}},
+          {type:'text',text:'This is a restaurant menu page (may be in any language). Extract ALL dishes/drinks with prices. Return ONLY valid JSON: {"items":[{"name":"dish name","price":0.00,"desc":"short description or empty"},...]}'  }
+        ]}]
+      })
+    });
+    const data=await resp.json();
+    if(data.error)throw new Error(data.error.message);
+    const txt=(data.content?.[0]?.text||'').replace(/```json|```/g,'').trim();
+    const parsed=JSON.parse(txt);
+    S.scan.items=(parsed.items||[]).map(it=>({
+      name:it.name||'',
+      price:parseFloat(it.price)||0,
+      qty:1,
+      desc:it.desc||'',
+      needsReview:false,
+      confidence:0.70,
+      assignments:{}
+    })).filter(it=>it.price>0&&it.name);
+    if(ld)ld.style.display='none';
+    showMenuPicker();
+  }catch(e){
+    console.warn('[Menu] Claude Vision failed:',e.message);
+    if(ld)ld.style.display='none';
+    toast('⚠️ AI недоступен');
+    S.scan.items=[];
+    showMenuPicker();
   }
-
-  // ── Попытка 2: Claude Vision (для меню и как fallback чека) ──
-  {
-    try{
-      setStatus('AI распознаёт...');
-      const prompt=m==='r'
-        ?`You are a receipt parser. Extract purchased items from this receipt photo.
-Receipt may be in German, Russian, Italian, French, Spanish, English or other language.
-
-IMPORTANT RULES:
-- price = monetary amount (realistic: 0.50–500 EUR/USD/RUB)
-- NEVER use document numbers, receipt numbers, article codes as prices
-- Gas station: "*000001 Super 95  26,87 EUR" → name="Super 95", price=26.87
-- qty=1 unless explicit quantity shown
-
-EXCLUDE: totals, taxes (MwSt/НДС/TVA), receipt numbers (Beleg-Nr), payment lines (VISA/EC), address, date, thank-you messages
-
-Return ONLY valid JSON:
-{"items":[{"name":"item name","price":0.00,"qty":1}]}`
-        :'This is a restaurant menu page (may be in any language). Extract ALL dishes/drinks with prices. Return ONLY valid JSON: {"items":[{"name":"dish name","price":0.00,"desc":"short description or empty"},...]}';
-      const resp=await fetch(`${API_BASE}/api/anthropic`,{
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({
-          model:'claude-3-5-haiku-20241022',
-          max_tokens:2000,
-          messages:[{role:'user',content:[
-            {type:'image',source:{type:'base64',media_type:mt,data:b64}},
-            {type:'text',text:prompt}
-          ]}]
-        })
-      });
-      const data=await resp.json();
-      if(data.error)throw new Error(data.error.message);
-      const txt=(data.content?.[0]?.text||'').replace(/```json|```/g,'').trim();
-      const parsed=JSON.parse(txt);
-      const rawItems=parsed.items||[];
-      S.scan.items=rawItems.map(it=>({
-        name:it.name||'',
-        price:parseFloat(it.price)||0,
-        qty:parseInt(it.qty)||1,
-        desc:it.desc||'',
-        needsReview:false,
-        confidence:0.70,
-        assignments:{}
-      })).filter(it=>it.price>0&&it.name);
-      ld.style.display='none';
-      if(m==='r'){showParsed('Позиции чека','receipt');}
-      else{showMenuPicker();}
-      return;
-    }catch(e){
-      console.warn('[AI] Claude Vision failed:',e.message);
-      toast('⚠️ AI недоступен');
-      setStatus('Ошибка');
-    }
-  }
-  ld.style.display='none';
-  S.scan.items=[];
-  showMenuPicker();
 }
 
 // escHtml определён в /js/dom-utils.js

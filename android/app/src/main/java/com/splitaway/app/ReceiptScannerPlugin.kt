@@ -3,6 +3,7 @@ package com.splitaway.app
 import android.app.Activity
 import android.content.Intent
 import android.net.Uri
+import android.util.Base64
 import android.util.Log
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
@@ -15,8 +16,6 @@ import com.google.mlkit.vision.documentscanner.GmsDocumentScanningResult
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import org.json.JSONArray
-import org.json.JSONObject
 
 private const val TAG = "ReceiptScannerPlugin"
 private const val REQUEST_SCAN = 9901
@@ -28,21 +27,16 @@ private const val REQUEST_SCAN = 9901
  * 1. JS вызывает scanReceipt()
  * 2. Запускается ML Kit Document Scanner (автообрезка + исправление перспективы)
  * 3. handleOnActivityResult получает JPEG URI
- * 4. MlKitReceiptOcrEngine выполняет Text Recognition
- * 5. ReceiptParser разбирает структуру чека
- * 6. call.resolve(result) возвращает JSON в WebView
+ * 4. Файл читается и конвертируется в base64
+ * 5. call.resolve({imageBase64, mimeType, imageUri, ...}) возвращает данные в WebView
+ * 6. Frontend вызывает Eagle Doc OCR через /api/receipts/analyze
  *
- * Нет сетевых запросов. Нет платных API. Полностью локально.
+ * OCR выполняется на backend — API-ключ никогда не попадает в APK.
  */
 @CapacitorPlugin(name = "ReceiptScanner")
 class ReceiptScannerPlugin : Plugin() {
 
     @Volatile private var pendingCall: PluginCall? = null
-
-    // Движок OCR через интерфейс — легко заменить на FuturePaddleReceiptOcrEngine
-    private val ocrEngine: ReceiptOcrEngine by lazy {
-        MlKitReceiptOcrEngine(context)
-    }
 
     // ─────────────────────────────────────────────────────────────
     // ШАГ 1: Запустить ML Kit Document Scanner
@@ -52,7 +46,7 @@ class ReceiptScannerPlugin : Plugin() {
     fun scanReceipt(call: PluginCall) {
         call.setKeepAlive(true)   // держим call живым пока activity не вернёт результат
         pendingCall = call
-        Log.d(TAG, "scanReceipt: starting ML Kit Document Scanner [engine=${ocrEngine.engineName}]")
+        Log.d(TAG, "scanReceipt: starting ML Kit Document Scanner")
 
         val options = GmsDocumentScannerOptions.Builder()
             .setScannerMode(GmsDocumentScannerOptions.SCANNER_MODE_FULL)  // full = crop + perspective + contrast
@@ -119,72 +113,38 @@ class ReceiptScannerPlugin : Plugin() {
         val imageUri: Uri = pages[0].imageUri
         Log.d(TAG, "Got imageUri: $imageUri")
 
-        // ШАГ 3+4+5: OCR + парсинг в фоновом потоке
+        // ШАГ 3: Читаем файл и конвертируем в base64 в фоновом потоке
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                runOcrAndResolve(call, imageUri)
+                readImageAndResolve(call, imageUri)
             } catch (e: Throwable) {
-                // Ловим Throwable (включая OutOfMemoryError, NoClassDefFoundError и т.д.)
-                Log.e(TAG, "OCR coroutine crashed: ${e.javaClass.simpleName}: ${e.message}", e)
-                call.reject("OCR_CRASH", "${e.javaClass.simpleName}: ${e.message ?: "unknown"}")
+                Log.e(TAG, "Image read crashed: ${e.javaClass.simpleName}: ${e.message}", e)
+                call.reject("READ_FAILED", "${e.javaClass.simpleName}: ${e.message ?: "unknown"}")
             }
         }
     }
 
     // ─────────────────────────────────────────────────────────────
-    // ШАГИ 3-5: OCR + парсинг через движок + resolve
+    // ШАГ 3: Читаем изображение → base64 → resolve
     // ─────────────────────────────────────────────────────────────
 
-    private suspend fun runOcrAndResolve(call: PluginCall, imageUri: Uri) {
-        // Движок сам декодирует bitmap, запускает OCR и ReceiptParser
-        val ocrResult = ocrEngine.recognize(
-            imageUri    = imageUri,
-            imageWidth  = 0,   // будет определено из bitmap
-            imageHeight = 0
-        )
+    private fun readImageAndResolve(call: PluginCall, imageUri: Uri) {
+        val inputStream = context.contentResolver.openInputStream(imageUri)
+            ?: throw IllegalStateException("Cannot open stream for $imageUri")
+        val bytes = inputStream.readBytes()
+        inputStream.close()
 
-        // Преобразуем JSONObject → JSObject (безопасно, с null-guard)
-        val resultJs = safeJsonToJSObject(ocrResult.parsedResult)
+        val imageBase64 = Base64.encodeToString(bytes, Base64.NO_WRAP)
+        Log.d(TAG, "Image read OK: ${bytes.size} bytes → ${imageBase64.length} base64 chars")
 
         val ret = JSObject()
-        ret.put("success",     true)
-        ret.put("imageUri",    imageUri.toString())
-        ret.put("imageWidth",  ocrResult.imageWidth)
-        ret.put("imageHeight", ocrResult.imageHeight)
-        ret.put("rawText",     ocrResult.rawText)
-        ret.put("result",      resultJs)
-        ret.put("engine",      ocrEngine.engineName)
+        ret.put("success",       true)
+        ret.put("imageBase64",   imageBase64)
+        ret.put("mimeType",      "image/jpeg")
+        ret.put("imageUri",      imageUri.toString())
+        ret.put("fileSizeBytes", bytes.size)
 
-        Log.d(TAG, "Resolving call with result: total=${ocrResult.parsedResult.opt("total")}")
         call.resolve(ret)
-    }
-
-    // ─────────────────────────────────────────────────────────────
-    // ВСПОМОГАТЕЛЬНОЕ: JSONObject → JSObject (null-safe)
-    // ─────────────────────────────────────────────────────────────
-
-    /**
-     * Конвертирует JSONObject в JSObject рекурсивно.
-     * JSObject(string) иногда крашится на JSONObject с null-значениями,
-     * поэтому обходим вручную.
-     */
-    private fun safeJsonToJSObject(json: JSONObject): JSObject {
-        val js = JSObject()
-        val keys = json.keys()
-        while (keys.hasNext()) {
-            val key = keys.next()
-            when (val v = json.opt(key)) {
-                null, JSONObject.NULL -> js.put(key, JSObject.NULL)
-                is JSONObject        -> js.put(key, safeJsonToJSObject(v))
-                is JSONArray         -> js.put(key, v)
-                is Boolean           -> js.put(key, v)
-                is Int               -> js.put(key, v)
-                is Long              -> js.put(key, v)
-                is Double            -> js.put(key, v)
-                else                 -> js.put(key, v.toString())
-            }
-        }
-        return js
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -192,6 +152,6 @@ class ReceiptScannerPlugin : Plugin() {
     // ─────────────────────────────────────────────────────────────
 
     override fun handleOnDestroy() {
-        ocrEngine.close()
+        // no resources to release (OCR engine removed)
     }
 }
