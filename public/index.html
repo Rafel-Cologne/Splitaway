@@ -18,6 +18,8 @@
 <script src="/js/supabase.js"></script>
 <script src="/js/sb-config.js"></script>
 <script src="/js/sb-client.js"></script>
+<!-- dom-utils.js — безопасная работа с DOM, escHtml, setSafeText -->
+<script src="/js/dom-utils.js"></script>
 <style>
 :root{
   --bg:#0a0a0f;--bg2:#111118;--bg3:#1c1c28;
@@ -940,7 +942,7 @@ function ctRemMember(i){CT.members.splice(i,1);renderCTMembers()}
 function renderCTMembers(){
   document.getElementById('ct-members').innerHTML=CT.members.map((m,i)=>
     `<div class="chip on" style="background:${ac(m.name)};border-color:${ac(m.name)};gap:5px">
-      ${m.name}<span style="opacity:0.65;font-size:0.68rem">${m.gender==='f'?'Ж':'М'}</span>
+      ${escHtml(m.name)}<span style="opacity:0.65;font-size:0.68rem">${m.gender==='f'?'Ж':'М'}</span>
       <span onclick="ctRemMember(${i})" style="cursor:pointer;opacity:0.7">×</span>
     </div>`).join('')
 }
@@ -1004,9 +1006,9 @@ async function createTrip(){
 function renderPickList(){
   document.getElementById('ob-pick-trip').textContent=S.trip.name;
   document.getElementById('ob-pick-list').innerHTML=S.members.map(m=>
-    `<button class="btn btn-s btn-fw" onclick="pickName('${m.name}')" style="justify-content:flex-start;gap:11px">
-      <div class="av av-sm" style="background:${ac(m.name)}">${m.name[0]}</div>
-      <span style="font-weight:600;color:${ac(m.name)}">${m.name}</span>
+    `<button class="btn btn-s btn-fw" data-name="${escHtml(m.name)}" onclick="pickName(this.dataset.name)" style="justify-content:flex-start;gap:11px">
+      <div class="av av-sm" style="background:${ac(m.name)}">${escHtml(m.name[0]||'?')}</div>
+      <span style="font-weight:600;color:${ac(m.name)}">${escHtml(m.name)}</span>
       <span style="color:var(--t3);font-size:0.73rem;margin-left:auto">${m.gender==='f'?'Ж':'М'}</span>
     </button>`).join('');
 }
@@ -1112,18 +1114,18 @@ function renderDash(){
   } else {
     myEl.innerHTML=[
       ...myOwe.map(d=>`<div class="dr">
-        <div class="av av-sm" style="background:${ac(d.to)}">${d.to[0]}</div>
+        <div class="av av-sm" style="background:${ac(d.to)}">${escHtml(d.to[0]||'?')}</div>
         <div style="flex:1;font-size:0.86rem">
-          <span style="color:${ac(S.me)};font-weight:600">${S.me}</span>
+          <span style="color:${ac(S.me)};font-weight:600">${escHtml(S.me)}</span>
           <span style="color:var(--t2)"> ${owes(S.me)} </span>
-          <span style="color:${ac(d.to)};font-weight:600">${d.to}</span>
+          <span style="color:${ac(d.to)};font-weight:600">${escHtml(d.to)}</span>
         </div>
         <div class="da neg">-${fm(d.amount)} €</div>
       </div>`),
       ...myOwed.map(d=>`<div class="dr">
-        <div class="av av-sm" style="background:${ac(d.from)}">${d.from[0]}</div>
+        <div class="av av-sm" style="background:${ac(d.from)}">${escHtml(d.from[0]||'?')}</div>
         <div style="flex:1;font-size:0.86rem">
-          <span style="color:${ac(d.from)};font-weight:600">${d.from}</span>
+          <span style="color:${ac(d.from)};font-weight:600">${escHtml(d.from)}</span>
           <span style="color:var(--t2)"> ${owes(d.from)} вам</span>
         </div>
         <div class="da pos">+${fm(d.amount)} €</div>
@@ -1177,12 +1179,12 @@ function renderMembersList(){
         ${vm.map((n,idx)=>{
           const last=memberLastAction(n);
           const lastHtml=last
-            ?`<span style="color:var(--t2);font-size:0.7rem">${last.name} · ${fdate(last.date)}</span>`
+            ?`<span style="color:var(--t2);font-size:0.7rem">${escHtml(last.name)} · ${fdate(last.date)}</span>`
             :'<span style="color:var(--green);font-size:0.7rem">✓ OK</span>';
-          return `<div style="display:flex;align-items:center;gap:11px;padding:11px 13px${idx?`;border-top:1px solid ${rowBdr}`:''}cursor:pointer" onclick="showMemberDetail('${n}')">
-            <div class="av av-md" style="background:${ac(n)}">${n[0]}</div>
+          return `<div style="display:flex;align-items:center;gap:11px;padding:11px 13px${idx?`;border-top:1px solid ${rowBdr}`:''}cursor:pointer" data-name="${escHtml(n)}" onclick="showMemberDetail(this.dataset.name)">
+            <div class="av av-md" style="background:${ac(n)}">${escHtml(n[0]||'?')}</div>
             <div style="flex:1;min-width:0">
-              <div style="font-weight:600;font-size:0.88rem;color:${ac(n)}">${n}${n===S.adminName?' <span style="font-size:0.6rem;background:rgba(108,99,255,0.2);color:var(--ac2);padding:1px 6px;border-radius:4px;font-weight:700;margin-left:4px;vertical-align:middle">Admin</span>':''}${n===S.me?' <span style="color:var(--ac2);font-size:0.7rem">(вы)</span>':''}</div>
+              <div style="font-weight:600;font-size:0.88rem;color:${ac(n)}">${escHtml(n)}${n===S.adminName?' <span style="font-size:0.6rem;background:rgba(108,99,255,0.2);color:var(--ac2);padding:1px 6px;border-radius:4px;font-weight:700;margin-left:4px;vertical-align:middle">Admin</span>':''}${n===S.me?' <span style="color:var(--ac2);font-size:0.7rem">(вы)</span>':''}</div>
               <div style="margin-top:2px">${lastHtml}</div>
             </div>
             <div style="text-align:right;flex-shrink:0">
@@ -1198,13 +1200,13 @@ function renderMembersList(){
   S.members.filter(m=>!rendered.has(m.name)).forEach(m=>{
     const last=memberLastAction(m.name);
     const lastHtml=last
-      ?`<span style="color:var(--t2);font-size:0.7rem">${last.name} · ${fdate(last.date)}</span>`
+      ?`<span style="color:var(--t2);font-size:0.7rem">${escHtml(last.name)} · ${fdate(last.date)}</span>`
       :'<span style="color:var(--green);font-size:0.7rem">✓ OK</span>';
     items.push(`
-      <div class="er" style="cursor:pointer" onclick="showMemberDetail('${m.name}')">
-        <div class="av av-md" style="background:${ac(m.name)}">${m.name[0]}</div>
+      <div class="er" style="cursor:pointer" data-name="${escHtml(m.name)}" onclick="showMemberDetail(this.dataset.name)">
+        <div class="av av-md" style="background:${ac(m.name)}">${escHtml(m.name[0]||'?')}</div>
         <div class="ei">
-          <div class="en" style="color:${ac(m.name)}">${m.name}${m.name===S.adminName?' <span style="font-size:0.6rem;background:rgba(108,99,255,0.2);color:var(--ac2);padding:1px 6px;border-radius:4px;font-weight:700;margin-left:4px;vertical-align:middle">Admin</span>':''}${m.name===S.me?' <span style="color:var(--ac2);font-size:0.73rem">(вы)</span>':''}</div>
+          <div class="en" style="color:${ac(m.name)}">${escHtml(m.name)}${m.name===S.adminName?' <span style="font-size:0.6rem;background:rgba(108,99,255,0.2);color:var(--ac2);padding:1px 6px;border-radius:4px;font-weight:700;margin-left:4px;vertical-align:middle">Admin</span>':''}${m.name===S.me?' <span style="color:var(--ac2);font-size:0.73rem">(вы)</span>':''}</div>
           <div style="margin-top:3px">${lastHtml}</div>
         </div>
         <div style="text-align:right;flex-shrink:0">
@@ -1246,7 +1248,7 @@ function showMemberDetail(name){
         return `<div class="er" onclick="closeModal('m-member-detail');showExpDetail('${e.id}')">
           <div style="width:36px;height:36px;border-radius:var(--rxs);background:var(--s2);display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0">${e.fromTreasury?'💰':'💳'}</div>
           <div class="ei">
-            <div class="en">${e.name}</div>
+            <div class="en">${escHtml(e.name)}</div>
             <div class="em">
               ${isPayer?`<span style="color:var(--green);font-size:0.72rem;font-weight:600">Платил</span>`:`<span style="color:var(--t3);font-size:0.72rem">Участник</span>`}
             </div>
@@ -1265,9 +1267,9 @@ function showMemberDetail(name){
   document.getElementById('m-member-detail-content').innerHTML=`
     <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0 0">
       <div style="display:flex;align-items:center;gap:12px">
-        <div class="av" style="width:50px;height:50px;background:${ac(name)};font-size:1.3rem;box-shadow:0 0 20px ${ac(name)}55">${name[0]}</div>
+        <div class="av" style="width:50px;height:50px;background:${ac(name)};font-size:1.3rem;box-shadow:0 0 20px ${ac(name)}55">${escHtml(name[0]||'?')}</div>
         <div>
-          <div style="font-weight:800;font-size:1.15rem;color:${ac(name)}">${name}${isMe?` <span style="font-size:0.65rem;background:var(--aglow);color:var(--ac2);padding:2px 7px;border-radius:4px;vertical-align:middle">вы</span>`:''}${name===S.adminName?` <span style="font-size:0.6rem;background:rgba(108,99,255,0.18);color:var(--ac2);padding:2px 6px;border-radius:4px;vertical-align:middle">Admin</span>`:''}</div>
+          <div style="font-weight:800;font-size:1.15rem;color:${ac(name)}">${escHtml(name)}${isMe?` <span style="font-size:0.65rem;background:var(--aglow);color:var(--ac2);padding:2px 7px;border-radius:4px;vertical-align:middle">вы</span>`:''}${name===S.adminName?` <span style="font-size:0.6rem;background:rgba(108,99,255,0.18);color:var(--ac2);padding:2px 6px;border-radius:4px;vertical-align:middle">Admin</span>`:''}</div>
           <div style="font-size:0.75rem;color:var(--t2);margin-top:2px">${exps.length} расходов · ${m.gender==='f'?'участница':'участник'}</div>
         </div>
       </div>
@@ -1278,13 +1280,13 @@ function showMemberDetail(name){
     <div style="display:flex;flex-direction:column;gap:7px">
       <div class="sec-ttl">Баланс</div>
       ${myOwed.map(d=>`<div style="display:flex;align-items:center;gap:9px;padding:10px 12px;background:var(--gglow);border:1px solid rgba(34,211,160,0.25);border-radius:var(--rsm)">
-        <div class="av av-sm" style="background:${ac(d.from)}">${d.from[0]}</div>
-        <div style="flex:1;font-size:0.86rem"><span style="color:${ac(d.from)};font-weight:700">${d.from}</span> <span style="color:var(--t2)">должен вам</span></div>
+        <div class="av av-sm" style="background:${ac(d.from)}">${escHtml(d.from[0]||'?')}</div>
+        <div style="flex:1;font-size:0.86rem"><span style="color:${ac(d.from)};font-weight:700">${escHtml(d.from)}</span> <span style="color:var(--t2)">должен вам</span></div>
         <div style="font-family:var(--mono);font-weight:700;color:var(--green)">+${fm(d.amount)} €</div>
       </div>`).join('')}
       ${myDebts.map(d=>`<div style="display:flex;align-items:center;gap:9px;padding:10px 12px;background:var(--rglow);border:1px solid rgba(255,95,110,0.25);border-radius:var(--rsm)">
-        <div class="av av-sm" style="background:${ac(d.to)}">${d.to[0]}</div>
-        <div style="flex:1;font-size:0.86rem"><span style="color:var(--t2)">Должен </span><span style="color:${ac(d.to)};font-weight:700">${d.to}</span></div>
+        <div class="av av-sm" style="background:${ac(d.to)}">${escHtml(d.to[0]||'?')}</div>
+        <div style="flex:1;font-size:0.86rem"><span style="color:var(--t2)">Должен </span><span style="color:${ac(d.to)};font-weight:700">${escHtml(d.to)}</span></div>
         <div style="font-family:var(--mono);font-weight:700;color:var(--red)">-${fm(d.amount)} €</div>
       </div>`).join('')}
     </div>`:`<div style="padding:10px 12px;background:var(--gglow);border:1px solid rgba(34,211,160,0.25);border-radius:var(--rsm);font-size:0.86rem;color:var(--green);font-weight:600">✓ Нет долгов — всё ровно</div>`}
@@ -1301,17 +1303,17 @@ function showMemberDetail(name){
 // EXPENSES
 // =======================================================
 function expRow(e){
-  const comment=e.comment?`<span style="color:var(--amber);font-size:0.7rem"> · ${e.comment}</span>`:'';
+  const comment=e.comment?`<span style="color:var(--amber);font-size:0.7rem"> · ${escHtml(e.comment)}</span>`:'';
   const dt=e.date?`<span style="color:var(--t3)">${fdate(e.date)}</span>`:'';
   const hasItems=e.items&&e.items.length>0;
   return `<div class="er" onclick="showExpDetail('${e.id}')" style="cursor:pointer">
     <div style="width:38px;height:38px;border-radius:var(--rxs);background:var(--s2);display:flex;align-items:center;justify-content:center;font-size:1.2rem;flex-shrink:0">${e.fromTreasury?'💰':'💳'}</div>
     <div class="ei">
-      <div class="en">${e.name}${comment}${hasItems?`<span style="font-size:0.65rem;background:rgba(108,99,255,0.18);color:var(--ac2);padding:1px 5px;border-radius:4px;margin-left:5px;vertical-align:middle">${e.items.length} поз.</span>`:''}</div>
+      <div class="en">${escHtml(e.name)}${comment}${hasItems?`<span style="font-size:0.65rem;background:rgba(108,99,255,0.18);color:var(--ac2);padding:1px 5px;border-radius:4px;margin-left:5px;vertical-align:middle">${e.items.length} поз.</span>`:''}</div>
       <div class="em">
         ${e.fromTreasury
           ?`<span style="color:var(--green);font-weight:600">Из общей кассы</span>${dt}`
-          :`<span>Платил <span style="color:${ac(e.paidBy)};font-weight:600">${e.paidBy}</span></span>${dt}`}
+          :`<span>Платил <span style="color:${ac(e.paidBy)};font-weight:600">${escHtml(e.paidBy)}</span></span>${dt}`}
       </div>
     </div>
     <div style="display:flex;align-items:center;gap:7px;flex-shrink:0">
@@ -1370,9 +1372,9 @@ function showExpDetail(id){
   document.getElementById('m-exp-detail-content').innerHTML=`
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px">
       <div>
-        <div style="font-weight:700;font-size:1.1rem">${e.name}</div>
+        <div style="font-weight:700;font-size:1.1rem">${escHtml(e.name)}</div>
         ${e.date?`<div style="font-size:0.76rem;color:var(--t2)">${fdate(e.date)}</div>`:''}
-        ${e.comment?`<div style="font-size:0.8rem;color:var(--amber);margin-top:2px">💬 ${e.comment}</div>`:''}
+        ${e.comment?`<div style="font-size:0.8rem;color:var(--amber);margin-top:2px">💬 ${escHtml(e.comment)}</div>`:''}
       </div>
       <button class="btn btn-g btn-sm btn-ic" onclick="closeModal('m-exp-detail')"><i data-lucide="x" style="width:15px;height:15px"></i></button>
     </div>
@@ -1391,14 +1393,14 @@ function showExpDetail(id){
          </div>`
         :`<div style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--s1);border-radius:var(--rsm)">
           <div class="av av-sm" style="background:var(--gglow);color:var(--green)">💳</div>
-          <div style="flex:1;font-size:0.86rem">Платил: <span style="color:${ac(e.paidBy)};font-weight:600">${e.paidBy}</span></div>
+          <div style="flex:1;font-size:0.86rem">Платил: <span style="color:${ac(e.paidBy)};font-weight:600">${escHtml(e.paidBy)}</span></div>
           <div style="font-family:var(--mono);font-weight:600">${fm(e.amount)} €</div>
         </div>
         ${e.participants.map(p=>{
           const u=units(p);const sh=ps*u;
           return `<div style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--s1);border-radius:var(--rsm)">
-            <div class="av av-sm" style="background:${ac(p)}">${p[0]}</div>
-            <div style="flex:1;font-size:0.86rem;color:${ac(p)};font-weight:500">${p}${u>1?`<span style="color:var(--t3);font-size:0.71rem;font-weight:400"> ×${u}</span>`:''}</div>
+            <div class="av av-sm" style="background:${ac(p)}">${escHtml(p[0]||'?')}</div>
+            <div style="flex:1;font-size:0.86rem;color:${ac(p)};font-weight:500">${escHtml(p)}${u>1?`<span style="color:var(--t3);font-size:0.71rem;font-weight:400"> ×${u}</span>`:''}</div>
             <div style="font-family:var(--mono);font-size:0.86rem">${fm(sh)} €</div>
           </div>`
         }).join('')}`}
@@ -1408,8 +1410,8 @@ function showExpDetail(id){
       <div class="sec-ttl" style="margin-bottom:8px">Заказы участников</div>
       <div class="card" style="padding:14px">
         ${e.items.map(it=>`<div class="ritem">
-          <div style="flex:1;font-size:0.86rem">${it.name}</div>
-          <div style="color:${it.assignedTo?ac(it.assignedTo):'var(--t2)'};font-size:0.76rem;font-weight:600">${it.assignedTo||'Все'}</div>
+          <div style="flex:1;font-size:0.86rem">${escHtml(it.name)}</div>
+          <div style="color:${it.assignedTo?ac(it.assignedTo):'var(--t2)'};font-size:0.76rem;font-weight:600">${it.assignedTo?escHtml(it.assignedTo):'Все'}</div>
           <div style="font-family:var(--mono);font-weight:600;font-size:0.86rem">${fm(it.price)} €</div>
         </div>`).join('')}
       </div>
@@ -1441,9 +1443,9 @@ function renderAEModal(){
       </div>`
     :'';
   if(pp)pp.innerHTML=S.members.map(m=>{
-    return `<div class="wp ${m.name===S.me?'on':''}" data-payer="${m.name}" onclick="selPayer(this,'${m.name}')">
-      <div class="av av-sm" style="background:${ac(m.name)}">${m.name[0]}</div>
-      <span style="color:${ac(m.name)};font-weight:600">${m.name}</span>
+    return `<div class="wp ${m.name===S.me?'on':''}" data-payer="${escHtml(m.name)}" onclick="selPayer(this,this.dataset.payer)">
+      <div class="av av-sm" style="background:${ac(m.name)}">${escHtml(m.name[0]||'?')}</div>
+      <span style="color:${ac(m.name)};font-weight:600">${escHtml(m.name)}</span>
     </div>`;
   }).join('')+treasuryBtn;
   // Participants list
@@ -1456,9 +1458,9 @@ function renderAEParticipants(){
   ap.innerHTML=S.members.map(m=>{
     const u=units(m.name);
     return `<label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:7px;border-radius:var(--rxs)">
-      <input type="checkbox" class="ae-check" value="${m.name}" style="accent-color:var(--accent);width:15px;height:15px">
-      <div class="av av-sm" style="background:${ac(m.name)}">${m.name[0]}</div>
-      <span style="font-size:0.86rem;flex:1;color:${ac(m.name)};font-weight:500">${m.name}</span>
+      <input type="checkbox" class="ae-check" value="${escHtml(m.name)}" style="accent-color:var(--accent);width:15px;height:15px">
+      <div class="av av-sm" style="background:${ac(m.name)}">${escHtml(m.name[0]||'?')}</div>
+      <span style="font-size:0.86rem;flex:1;color:${ac(m.name)};font-weight:500">${escHtml(m.name)}</span>
       ${u>1?`<span class="bdg bdg-r" style="font-size:0.66rem">×${u}</span>`:''}
     </label>`;
   }).join('');
@@ -1585,27 +1587,27 @@ function renderBalances(){
     const settled=S.settledDebts||[];
     if(!debts.length&&!settled.length){el.innerHTML='<div class="emp"><div class="emp-ic">🎉</div><div class="emp-t">Все в расчёте!</div></div>';return}
     let html=debts.map((d,i)=>`
-      <div class="dr" style="cursor:pointer" onclick="showDebtDetail('${d.from}','${d.to}',${d.amount})">
-        <div class="av av-sm" style="background:${ac(d.from)}">${d.from[0]}</div>
+      <div class="dr" style="cursor:pointer" data-from="${escHtml(d.from)}" data-to="${escHtml(d.to)}" data-amount="${d.amount}" onclick="showDebtDetail(this.dataset.from,this.dataset.to,parseFloat(this.dataset.amount))">
+        <div class="av av-sm" style="background:${ac(d.from)}">${escHtml(d.from[0]||'?')}</div>
         <div style="flex:1;font-size:0.86rem">
-          <span style="color:${ac(d.from)};font-weight:600">${d.from}</span>
+          <span style="color:${ac(d.from)};font-weight:600">${escHtml(d.from)}</span>
           <span style="color:var(--t2)"> ${owes(d.from)} </span>
-          <span style="color:${ac(d.to)};font-weight:600">${d.to}</span>
+          <span style="color:${ac(d.to)};font-weight:600">${escHtml(d.to)}</span>
         </div>
         <div style="display:flex;align-items:center;gap:7px">
           <div class="da neg">${fm(d.amount)} €</div>
-          <button class="btn btn-green btn-sm" onclick="event.stopPropagation();settleDebt('${d.from}','${d.to}',${d.amount})" title="Отметить как погашен" style="padding:5px 10px;font-size:0.75rem">✓</button>
+          <button class="btn btn-green btn-sm" onclick="event.stopPropagation();settleDebt(this.closest('[data-from]').dataset.from,this.closest('[data-from]').dataset.to,parseFloat(this.closest('[data-from]').dataset.amount))" title="Отметить как погашен" style="padding:5px 10px;font-size:0.75rem">✓</button>
         </div>
       </div>`).join('');
     if(settled.length){
       html+=`<div style="font-size:0.73rem;color:var(--t2);font-weight:600;letter-spacing:0.06em;text-transform:uppercase;padding:8px 4px 4px">Погашённые</div>`;
       html+=[...settled].reverse().map(sd=>`
         <div class="dr" style="opacity:0.55">
-          <div class="av av-sm" style="background:${ac(sd.from)}">${sd.from[0]}</div>
+          <div class="av av-sm" style="background:${ac(sd.from)}">${escHtml(sd.from[0]||'?')}</div>
           <div style="flex:1;font-size:0.86rem;text-decoration:line-through">
-            <span style="color:${ac(sd.from)};font-weight:600">${sd.from}</span>
+            <span style="color:${ac(sd.from)};font-weight:600">${escHtml(sd.from)}</span>
             <span style="color:var(--t2)"> → </span>
-            <span style="color:${ac(sd.to)};font-weight:600">${sd.to}</span>
+            <span style="color:${ac(sd.to)};font-weight:600">${escHtml(sd.to)}</span>
           </div>
           <div style="display:flex;align-items:center;gap:7px">
             <div class="da" style="text-decoration:line-through">${fm(sd.amount)} €</div>
@@ -1618,10 +1620,10 @@ function renderBalances(){
     const paid=calcPaid();const mx=Math.max(...Object.values(paid).filter(x=>x>0),1);
     el.innerHTML=S.members.map(m=>{
       const net=bal[m.name]||0;
-      return `<div class="dr" style="flex-direction:column;align-items:flex-start;gap:7px;cursor:pointer" onclick="showPersonDetail('${m.name}')">
+      return `<div class="dr" style="flex-direction:column;align-items:flex-start;gap:7px;cursor:pointer" data-name="${escHtml(m.name)}" onclick="showPersonDetail(this.dataset.name)">
         <div style="display:flex;align-items:center;gap:10px;width:100%">
-          <div class="av av-md" style="background:${ac(m.name)}">${m.name[0]}</div>
-          <div style="flex:1"><div style="font-weight:600;color:${ac(m.name)}">${m.name}</div><div style="font-size:0.73rem;color:var(--t2)">Оплатил: ${fm(paid[m.name]||0)} €</div></div>
+          <div class="av av-md" style="background:${ac(m.name)}">${escHtml(m.name[0]||'?')}</div>
+          <div style="flex:1"><div style="font-weight:600;color:${ac(m.name)}">${escHtml(m.name)}</div><div style="font-size:0.73rem;color:var(--t2)">Оплатил: ${fm(paid[m.name]||0)} €</div></div>
           <div class="da ${net>=0?'pos':'neg'}">${net>=0?'+':''}${fm(net)} €</div>
         </div>
         <div class="pb" style="width:100%"><div class="pf" style="width:${Math.min(100,(paid[m.name]||0)/mx*100)}%;background:${net>=0?'var(--green)':'var(--red)'}"></div></div>
@@ -1631,13 +1633,13 @@ function renderBalances(){
     const settled=S.settledDebts||[];
     if(!debts.length&&!settled.length){el.innerHTML='<div class="emp"><div class="emp-ic">✅</div><div class="emp-t">Все чисто!</div></div>';return}
     let html=`<div class="card" style="background:var(--aglow);border-color:rgba(108,99,255,0.18);margin-bottom:7px"><div style="font-size:0.8rem;color:var(--ac2);font-weight:600;margin-bottom:3px">⚡ Оптимизированный расчёт</div><div style="font-size:0.76rem;color:var(--t2)">Минимум переводов</div></div>`;
-    html+=debts.map((d,i)=>`<div class="dr" style="cursor:pointer" onclick="showDebtDetail('${d.from}','${d.to}',${d.amount})">
+    html+=debts.map((d,i)=>`<div class="dr" style="cursor:pointer" data-from="${escHtml(d.from)}" data-to="${escHtml(d.to)}" data-amount="${d.amount}" onclick="showDebtDetail(this.dataset.from,this.dataset.to,parseFloat(this.dataset.amount))">
       <div style="width:19px;height:19px;border-radius:50%;background:var(--s2);display:flex;align-items:center;justify-content:center;font-size:0.68rem;font-weight:700;color:var(--t2)">${i+1}</div>
-      <div class="av av-sm" style="background:${ac(d.from)}">${d.from[0]}</div>
+      <div class="av av-sm" style="background:${ac(d.from)}">${escHtml(d.from[0]||'?')}</div>
       <div style="flex:1;font-size:0.86rem">
-        <span style="color:${ac(d.from)};font-weight:600">${d.from}</span>
+        <span style="color:${ac(d.from)};font-weight:600">${escHtml(d.from)}</span>
         <span style="color:var(--t3)"> → </span>
-        <span style="color:${ac(d.to)};font-weight:600">${d.to}</span>
+        <span style="color:${ac(d.to)};font-weight:600">${escHtml(d.to)}</span>
       </div>
       <div class="da neg">${fm(d.amount)} €</div>
     </div>`).join('');
@@ -1645,11 +1647,11 @@ function renderBalances(){
       html+=`<div style="font-size:0.73rem;color:var(--t2);font-weight:600;letter-spacing:0.06em;text-transform:uppercase;padding:8px 4px 4px;margin-top:4px">✅ Погашённые долги</div>`;
       html+=[...settled].reverse().map(sd=>`
         <div class="dr" style="opacity:0.5">
-          <div class="av av-sm" style="background:${ac(sd.from)}">${sd.from[0]}</div>
+          <div class="av av-sm" style="background:${ac(sd.from)}">${escHtml(sd.from[0]||'?')}</div>
           <div style="flex:1;font-size:0.84rem;text-decoration:line-through;color:var(--t2)">
-            <span style="color:${ac(sd.from)};font-weight:600">${sd.from}</span>
+            <span style="color:${ac(sd.from)};font-weight:600">${escHtml(sd.from)}</span>
             <span> → </span>
-            <span style="color:${ac(sd.to)};font-weight:600">${sd.to}</span>
+            <span style="color:${ac(sd.to)};font-weight:600">${escHtml(sd.to)}</span>
           </div>
           <div style="font-family:var(--mono);font-size:0.86rem;text-decoration:line-through;color:var(--t3)">${fm(sd.amount)} €</div>
         </div>`).join('');
@@ -1696,9 +1698,9 @@ function showDebtDetail(fromName, toName, totalAmt){
       <div>
         <div style="font-weight:700;font-size:1.1rem">Расчёт долга</div>
         <div style="font-size:0.82rem;color:var(--t2);margin-top:3px">
-          <span style="color:${ac(fromName)};font-weight:600">${fromName}</span>
+          <span style="color:${ac(fromName)};font-weight:600">${escHtml(fromName)}</span>
           <span> ${owes(fromName)} </span>
-          <span style="color:${ac(toName)};font-weight:600">${toName}</span>
+          <span style="color:${ac(toName)};font-weight:600">${escHtml(toName)}</span>
         </div>
       </div>
       <button class="btn btn-g btn-sm btn-ic" onclick="closeModal('m-debt-detail')"><i data-lucide="x" style="width:15px;height:15px"></i></button>
@@ -1712,18 +1714,18 @@ function showDebtDetail(fromName, toName, totalAmt){
       ${lines.map(l=>`
         <div style="padding:11px 13px;background:var(--s1);border:1px solid var(--b1);border-radius:var(--rsm)">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">
-            <div style="font-weight:600;font-size:0.88rem">${l.exp.name}</div>
+            <div style="font-weight:600;font-size:0.88rem">${escHtml(l.exp.name)}</div>
             <div style="font-family:var(--mono);font-weight:700;font-size:0.9rem;color:${l.type==='owes'?'var(--red)':'var(--green)'}">${l.type==='owes'?'-':'+'}${fm(l.share)} €</div>
           </div>
           <div style="font-size:0.75rem;color:var(--t2);display:flex;gap:8px;flex-wrap:wrap">
             <span>${l.exp.date?fdate(l.exp.date):''}</span>
-            <span>Платил: <span style="color:${ac(l.exp.paidBy)};font-weight:500">${l.exp.paidBy}</span></span>
+            <span>Платил: <span style="color:${ac(l.exp.paidBy)};font-weight:500">${escHtml(l.exp.paidBy)}</span></span>
             <span>Всего: ${fm(l.exp.amount)} €</span>
             <span>${l.exp.participants.length} уч.</span>
           </div>
           ${l.type==='owes'
-            ?`<div style="font-size:0.73rem;color:var(--t3);margin-top:4px">${fromName} участвовал в расходе — доля: ${fm(l.share)} €</div>`
-            :`<div style="font-size:0.73rem;color:var(--t3);margin-top:4px">${fromName} оплатил за ${toName} — доля ${toName}: ${fm(l.share)} €</div>`
+            ?`<div style="font-size:0.73rem;color:var(--t3);margin-top:4px">${escHtml(fromName)} участвовал в расходе — доля: ${fm(l.share)} €</div>`
+            :`<div style="font-size:0.73rem;color:var(--t3);margin-top:4px">${escHtml(fromName)} оплатил за ${escHtml(toName)} — доля ${escHtml(toName)}: ${fm(l.share)} €</div>`
           }
         </div>`).join('')}
     </div>
@@ -1739,8 +1741,8 @@ function showPersonDetail(name){
   const html=`
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px">
       <div style="display:flex;align-items:center;gap:11px">
-        <div class="av av-lg" style="background:${ac(name)}">${name[0]}</div>
-        <div><div style="font-weight:700;font-size:1.1rem;color:${ac(name)}">${name}</div><div style="font-size:0.76rem;color:var(--t2)">Баланс участника</div></div>
+        <div class="av av-lg" style="background:${ac(name)}">${escHtml(name[0]||'?')}</div>
+        <div><div style="font-weight:700;font-size:1.1rem;color:${ac(name)}">${escHtml(name)}</div><div style="font-size:0.76rem;color:var(--t2)">Баланс участника</div></div>
       </div>
       <button class="btn btn-g btn-sm btn-ic" onclick="closeModal('m-debt-detail')"><i data-lucide="x" style="width:15px;height:15px"></i></button>
     </div>
@@ -1757,7 +1759,7 @@ function showPersonDetail(name){
         const net_=paid_-share;
         return `<div style="padding:11px 13px;background:var(--s1);border:1px solid var(--b1);border-radius:var(--rsm)">
           <div style="display:flex;justify-content:space-between;margin-bottom:4px">
-            <div style="font-weight:600;font-size:0.86rem">${e.name}</div>
+            <div style="font-weight:600;font-size:0.86rem">${escHtml(e.name)}</div>
             <div style="font-family:var(--mono);font-weight:700;font-size:0.86rem;color:${net_>=0?'var(--green)':'var(--red)'}">${net_>=0?'+':''}${fm(net_)} €</div>
           </div>
           <div style="font-size:0.73rem;color:var(--t2);display:flex;gap:7px;flex-wrap:wrap">
@@ -1816,8 +1818,8 @@ function renderTreasury(){
       const usedPct=st.contributed>0?Math.min(100,(st.spent/st.contributed)*100):0;
       return `<div style="padding:12px 14px;background:var(--s1);border:1px solid var(--b1);border-radius:var(--rsm)">
         <div style="display:flex;align-items:center;gap:9px;margin-bottom:8px">
-          <div class="av av-sm" style="background:${ac(m.name)}">${m.name[0]}</div>
-          <span style="font-weight:600;color:${ac(m.name)};font-size:0.88rem;flex:1">${m.name}</span>
+          <div class="av av-sm" style="background:${ac(m.name)}">${escHtml(m.name[0]||'?')}</div>
+          <span style="font-weight:600;color:${ac(m.name)};font-size:0.88rem;flex:1">${escHtml(m.name)}</span>
           <span style="font-family:var(--mono);font-weight:700;font-size:0.95rem;color:${st.remaining>=0?'var(--green)':'var(--red)'}">
             ${fm(st.remaining)} €
           </span>
@@ -1838,7 +1840,7 @@ function renderTreasury(){
   if(holderBtn){
     const h=S.treasury.holder;
     holderBtn.innerHTML=h
-      ?`<span style="width:8px;height:8px;border-radius:50%;background:${ac(h)};display:inline-block;margin-right:5px;flex-shrink:0"></span><span style="color:${ac(h)};font-weight:600">${h}</span>`
+      ?`<span style="width:8px;height:8px;border-radius:50%;background:${ac(h)};display:inline-block;margin-right:5px;flex-shrink:0"></span><span style="color:${ac(h)};font-weight:600">${escHtml(h)}</span>`
       :'Не указано';
   }
 
@@ -1859,7 +1861,7 @@ function renderTreasury(){
     if(sumEl){
       sumEl.innerHTML=Object.entries(byMember).map(([name,data])=>`
         <div style="display:flex;align-items:center;gap:9px;padding:9px 11px;background:var(--s1);border:1px solid var(--b1);border-radius:var(--rsm)">
-          <div class="av av-sm" style="background:${ac(name)}">${name[0]}</div>
+          <div class="av av-sm" style="background:${ac(name)}">${escHtml(name[0]||'?')}</div>
           <div style="flex:1">
             <div style="font-size:0.86rem;color:${ac(name)};font-weight:600">${data.items.length>1?`${data.items.length} взноса`:'Взнос'}</div>
             ${data.lastDate?`<div style="font-size:0.71rem;color:var(--t3)">${fdate(data.lastDate)}</div>`:''}
@@ -1873,8 +1875,8 @@ function renderTreasury(){
       detEl.innerHTML=[...contribs].map((c,idx)=>{
         const canDel=S.isAdmin||(c.member===S.me);
         return `<div style="display:flex;align-items:center;gap:8px;padding:7px 11px;background:var(--s1);border:1px solid var(--b1);border-radius:var(--rsm);font-size:0.83rem">
-          <div class="av av-sm" style="background:${ac(c.member)}">${c.member[0]}</div>
-          <div style="flex:1;color:${ac(c.member)};font-weight:500">${c.member}</div>
+          <div class="av av-sm" style="background:${ac(c.member)}">${escHtml(c.member[0]||'?')}</div>
+          <div style="flex:1;color:${ac(c.member)};font-weight:500">${escHtml(c.member)}</div>
           <div style="color:var(--t3);font-size:0.71rem">${fdate(c.date)}</div>
           <div style="font-family:var(--mono);font-weight:700;color:var(--green)">+${fm(c.amount)} €</div>
           ${canDel?`<button class="btn btn-g btn-sm btn-ic" onclick="deleteContrib(${idx})" title="Удалить"><i data-lucide="trash-2" style="width:11px;height:11px"></i></button>`:''}
@@ -1895,14 +1897,14 @@ function openAddCash(){
   const el=document.getElementById('ac-contributor');
   if(el){
     el.innerHTML=S.members.map(m=>
-      `<div class="wp ${m.name===S.me?'on':''}" data-contributor="${m.name}" onclick="selContributor(this,'${m.name}')">
-        <div class="av av-sm" style="background:${ac(m.name)}">${m.name[0]}</div>
-        <span style="color:${ac(m.name)};font-weight:600">${m.name}</span>
+      `<div class="wp ${m.name===S.me?'on':''}" data-contributor="${escHtml(m.name)}" onclick="selContributor(this)">
+        <div class="av av-sm" style="background:${ac(m.name)}">${escHtml(m.name[0]||'?')}</div>
+        <span style="color:${ac(m.name)};font-weight:600">${escHtml(m.name)}</span>
       </div>`).join('');
   }
   openModal('m-add-cash');initializeIcons()
 }
-function selContributor(el,name){
+function selContributor(el){
   document.querySelectorAll('[data-contributor]').forEach(b=>b.classList.remove('on'));
   el.classList.add('on');
 }
@@ -1927,9 +1929,9 @@ function toggleContribList(){
 }
 function openHolderPicker(){
   const current=S.treasury.holder;
-  const opts=S.members.map(m=>`<div class="wp ${m.name===current?'on':''}" data-holder="${m.name}" onclick="setHolder('${m.name}',this)" style="cursor:pointer">
-    <div class="av av-sm" style="background:${ac(m.name)}">${m.name[0]}</div>
-    <span style="color:${ac(m.name)};font-weight:600">${m.name}</span>
+  const opts=S.members.map(m=>`<div class="wp ${m.name===current?'on':''}" data-holder="${escHtml(m.name)}" onclick="setHolder(this.dataset.holder,this)" style="cursor:pointer">
+    <div class="av av-sm" style="background:${ac(m.name)}">${escHtml(m.name[0]||'?')}</div>
+    <span style="color:${ac(m.name)};font-weight:600">${escHtml(m.name)}</span>
   </div>`).join('');
   document.getElementById('m-debt-detail-content').innerHTML=`
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
@@ -1973,22 +1975,22 @@ function openMyOrder(){
   const pEl=document.getElementById('mo-participant');
   pEl.innerHTML=S.members.map(m=>{
     const canSelect=S.isAdmin||m.name===S.me;
-    return `<div class="wp ${m.name===S.me?'on':''}" data-mo-person="${m.name}"
-      ${canSelect?`onclick="selMoPerson(this,'${m.name}')"`:''}
+    return `<div class="wp ${m.name===S.me?'on':''}" data-mo-person="${escHtml(m.name)}"
+      ${canSelect?'onclick="selMoPerson(this,this.dataset.moPerson)"':''}
       style="${!canSelect?'opacity:0.38;cursor:default;pointer-events:none':''}">
-      <div class="av av-sm" style="background:${ac(m.name)}">${m.name[0]}</div>
-      <span style="color:${ac(m.name)};font-weight:600">${m.name}</span>
+      <div class="av av-sm" style="background:${ac(m.name)}">${escHtml(m.name[0]||'?')}</div>
+      <span style="color:${ac(m.name)};font-weight:600">${escHtml(m.name)}</span>
     </div>`;
   }).join('');
   openModal('m-my-order');initializeIcons();
 }
 
-function selMoPerson(el,name){
+function selMoPerson(el){
   document.querySelectorAll('[data-mo-person]').forEach(b=>b.classList.remove('on'));
   el.classList.add('on');
 }
 
-function selMoPayer(el,name){
+function selMoPayer(el){
   document.querySelectorAll('[data-mo-payer]').forEach(b=>b.classList.remove('on'));
   el.classList.add('on');
 }
@@ -2037,7 +2039,7 @@ Text:\n${t}`}]})
   // Render items
   document.getElementById('mo-items-list').innerHTML=items.map((it,i)=>`
     <div style="display:flex;align-items:center;gap:9px;padding:8px 11px;background:var(--s1);border:1px solid var(--b1);border-radius:var(--rsm)">
-      <div style="flex:1;font-size:0.86rem">${it.name}${it.qty>1?` <span style="color:var(--t3);font-size:0.75rem">×${it.qty}</span>`:''}</div>
+      <div style="flex:1;font-size:0.86rem">${escHtml(it.name)}${it.qty>1?` <span style="color:var(--t3);font-size:0.75rem">×${it.qty}</span>`:''}</div>
       <div style="font-family:var(--mono);font-weight:600;font-size:0.88rem">${fm(it.price)} €</div>
       <button onclick="removeMoItem(${i})" style="border:none;background:none;color:var(--t3);cursor:pointer;padding:2px"><i data-lucide="x" style="width:12px;height:12px"></i></button>
     </div>`).join('');
@@ -2051,11 +2053,11 @@ Text:\n${t}`}]})
   </div>`:'';
   document.getElementById('mo-payer').innerHTML=S.members.map(m=>{
     const canSelect=S.isAdmin||m.name===S.me;
-    return `<div class="wp ${m.name===S.me?'on':''}" data-mo-payer="${m.name}"
-      ${canSelect?`onclick="selMoPayer(this,'${m.name}')"`:''}
+    return `<div class="wp ${m.name===S.me?'on':''}" data-mo-payer="${escHtml(m.name)}"
+      ${canSelect?'onclick="selMoPayer(this)"':''}
       style="${!canSelect?'opacity:0.38;cursor:default;pointer-events:none':''}">
-      <div class="av av-sm" style="background:${ac(m.name)}">${m.name[0]}</div>
-      <span style="color:${ac(m.name)};font-weight:600">${m.name}</span>
+      <div class="av av-sm" style="background:${ac(m.name)}">${escHtml(m.name[0]||'?')}</div>
+      <span style="color:${ac(m.name)};font-weight:600">${escHtml(m.name)}</span>
     </div>`;
   }).join('')+treasury;
 
@@ -2070,7 +2072,7 @@ function removeMoItem(idx){
   document.getElementById('mo-total').textContent=fm(total)+' €';
   document.getElementById('mo-items-list').innerHTML=_moItems.map((it,i)=>`
     <div style="display:flex;align-items:center;gap:9px;padding:8px 11px;background:var(--s1);border:1px solid var(--b1);border-radius:var(--rsm)">
-      <div style="flex:1;font-size:0.86rem">${it.name}${it.qty>1?` <span style="color:var(--t3);font-size:0.75rem">×${it.qty}</span>`:''}</div>
+      <div style="flex:1;font-size:0.86rem">${escHtml(it.name)}${it.qty>1?` <span style="color:var(--t3);font-size:0.75rem">×${it.qty}</span>`:''}</div>
       <div style="font-family:var(--mono);font-weight:600;font-size:0.88rem">${fm(it.price)} €</div>
       <button onclick="removeMoItem(${i})" style="border:none;background:none;color:var(--t3);cursor:pointer;padding:2px"><i data-lucide="x" style="width:12px;height:12px"></i></button>
     </div>`).join('');
@@ -2111,9 +2113,9 @@ function renderEditCashModal(){
   if(!contribs.length){el.innerHTML='<div class="emp" style="padding:18px"><div class="emp-t">Нет взносов</div></div>';return;}
   el.innerHTML=contribs.map((c,i)=>`
     <div style="display:flex;align-items:center;gap:8px;background:var(--s1);border:1px solid var(--b1);border-radius:var(--rsm);padding:10px 11px">
-      <div class="av av-sm" style="background:${ac(c.member)}">${c.member[0]}</div>
+      <div class="av av-sm" style="background:${ac(c.member)}">${escHtml(c.member[0]||'?')}</div>
       <div style="flex:1;min-width:0">
-        <div style="font-size:0.84rem;font-weight:600;color:${ac(c.member)}">${c.member}</div>
+        <div style="font-size:0.84rem;font-weight:600;color:${ac(c.member)}">${escHtml(c.member)}</div>
         <div style="font-size:0.71rem;color:var(--t3)">${fdate(c.date)}</div>
       </div>
       <input class="inp" type="number" id="ec-amt-${i}" value="${c.amount}" min="0.01" step="0.01"
@@ -2185,7 +2187,7 @@ function renderArchive(){
     return `<div class="er" onclick="${exp?`showExpDetail('${r.expenseId}')`:''}">
       <div style="width:38px;height:38px;border-radius:var(--rxs);background:var(--s2);display:flex;align-items:center;justify-content:center;font-size:1.2rem;flex-shrink:0">🧾</div>
       <div class="ei">
-        <div class="en">${r.merchant}</div>
+        <div class="en">${escHtml(r.merchant)}</div>
         <div class="em">
           <span style="color:var(--t3)">${fdate(r.date)}</span>
           <span>${r.itemCount} позиций</span>
@@ -2203,25 +2205,25 @@ function renderArchive(){
 function renderSettingMembers(){
   const el=document.getElementById('set-members');
   el.innerHTML=S.members.map(m=>`
-    <div style="display:flex;align-items:center;gap:10px;padding:10px 13px;background:var(--s1);border:1px solid var(--b1);border-radius:var(--rsm)">
-      <div class="av av-md" style="background:${ac(m.name)}">${m.name[0]}</div>
+    <div data-mname="${escHtml(m.name)}" style="display:flex;align-items:center;gap:10px;padding:10px 13px;background:var(--s1);border:1px solid var(--b1);border-radius:var(--rsm)">
+      <div class="av av-md" style="background:${ac(m.name)}">${escHtml(m.name[0]||'?')}</div>
       <div style="flex:1">
-        <span style="font-weight:600;color:${ac(m.name)}">${m.name}</span>
+        <span style="font-weight:600;color:${ac(m.name)}">${escHtml(m.name)}</span>
         <span style="font-size:0.72rem;color:var(--t2);margin-left:6px">${m.gender==='f'?'Ж':'М'}</span>
         ${isAdm(m.name)?'<span style="font-size:0.6rem;background:rgba(108,99,255,0.2);color:var(--ac2);padding:2px 6px;border-radius:4px;font-weight:700;margin-left:5px">Admin</span>':''}
         ${m.name===S.me?'<span style="font-size:0.65rem;background:var(--aglow);color:var(--ac2);padding:2px 6px;border-radius:4px;font-weight:600;margin-left:5px">вы</span>':''}
         ${S.groups.find(g=>g.members.includes(m.name))?`<span style="font-size:0.65rem;background:rgba(139,127,212,0.18);color:#8b7fd4;padding:2px 6px;border-radius:4px;font-weight:600;margin-left:5px">${S.groups.find(g=>g.members.includes(m.name)).type==='couple'?'♥ пара':'👨‍👩‍👧 семья'}</span>`:''}
       </div>
       <div style="display:flex;gap:5px">
-        ${(S.isAdmin||m.name===S.me)?`<button class="btn btn-g btn-sm btn-ic" title="Изменить цвет" onclick="openColorPicker('${m.name}')" style="padding:7px;position:relative">
+        ${(S.isAdmin||m.name===S.me)?`<button class="btn btn-g btn-sm btn-ic" title="Изменить цвет" onclick="openColorPicker(this.closest('[data-mname]').dataset.mname)" style="padding:7px;position:relative">
           <span style="display:block;width:13px;height:13px;border-radius:50%;background:${ac(m.name)};border:1px solid var(--b2)"></span>
         </button>`:''}
         ${S.isAdmin?`${m.name!==S.me?`<button class="btn btn-g btn-sm btn-ic" title="${isAdm(m.name)?'Снять права Админа':'Сделать Админом'}"
-          onclick="toggleMemberAdmin('${m.name}')" style="${isAdm(m.name)?'color:var(--amber)':''}">
+          onclick="toggleMemberAdmin(this.closest('[data-mname]').dataset.mname)" style="${isAdm(m.name)?'color:var(--amber)':''}">
           <i data-lucide="${isAdm(m.name)?'shield-off':'shield-check'}" style="width:13px;height:13px"></i>
         </button>`:''}
-        <button class="btn btn-g btn-sm btn-ic" title="Переименовать" onclick="openRenameMember('${m.name}')"><i data-lucide="pencil" style="width:13px;height:13px"></i></button>
-        ${m.name!==S.me?`<button class="btn btn-g btn-sm btn-ic" title="Удалить" onclick="removeMember('${m.name}')"><i data-lucide="trash-2" style="width:13px;height:13px"></i></button>`:''}
+        <button class="btn btn-g btn-sm btn-ic" title="Переименовать" onclick="openRenameMember(this.closest('[data-mname]').dataset.mname)"><i data-lucide="pencil" style="width:13px;height:13px"></i></button>
+        ${m.name!==S.me?`<button class="btn btn-g btn-sm btn-ic" title="Удалить" onclick="removeMember(this.closest('[data-mname]').dataset.mname)"><i data-lucide="trash-2" style="width:13px;height:13px"></i></button>`:''}
       `:''}
       </div>
     </div>`).join('');
@@ -2230,10 +2232,10 @@ function renderSettingMembers(){
   if(sel){
     sel.innerHTML=S.members.map(m=>{
       const inGrp=S.groups.find(g=>g.members.includes(m.name));
-      return `<div class="member-sel" data-ms="${m.name}" onclick="toggleMSel(this,'${m.name}')">
+      return `<div class="member-sel" data-ms="${escHtml(m.name)}" onclick="toggleMSel(this,this.dataset.ms)">
         <div class="chk"></div>
-        <div class="av av-sm" style="background:${ac(m.name)}">${m.name[0]}</div>
-        <span style="color:${ac(m.name)};font-weight:500">${m.name}</span>
+        <div class="av av-sm" style="background:${ac(m.name)}">${escHtml(m.name[0]||'?')}</div>
+        <span style="color:${ac(m.name)};font-weight:500">${escHtml(m.name)}</span>
         ${inGrp?`<span style="font-size:0.65rem;color:var(--t3)">(в группе)</span>`:''}
       </div>`
     }).join('')
@@ -2247,20 +2249,22 @@ function openColorPicker(name){
   const palette=['#818cf8','#34d399','#fb7185','#fbbf24','#38bdf8','#e879f9','#f97316','#4ade80','#f472b6','#a78bfa','#22d3a0','#ef4444','#3b82f6','#eab308','#ec4899','#8b5cf6','#06b6d4','#84cc16'];
   const current=S.memberColors&&S.memberColors[name];
   document.getElementById('m-debt-detail-content').innerHTML=`
+    <div data-cpname="${escHtml(name)}">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-      <div class="mdl-title">🎨 Цвет: ${name}</div>
+      <div class="mdl-title">🎨 Цвет: ${escHtml(name)}</div>
       <button class="btn btn-g btn-sm btn-ic" onclick="closeModal('m-debt-detail')"><i data-lucide="x" style="width:14px;height:14px"></i></button>
     </div>
-    <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px" id="cp-swatches">
-      ${palette.map(c=>`<div onclick="pickColor('${name}','${c}')" style="width:38px;height:38px;border-radius:50%;background:${c};cursor:pointer;border:3px solid ${c===current?'#fff':'transparent'};box-shadow:${c===current?'0 0 0 2px var(--accent)':'none'};transition:all 0.15s" data-clr="${c}"></div>`).join('')}
+    <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px" id="cp-swatches" data-cpname="${escHtml(name)}">
+      ${palette.map(c=>`<div onclick="pickColor(this.closest('[data-cpname]').dataset.cpname,'${c}')" style="width:38px;height:38px;border-radius:50%;background:${c};cursor:pointer;border:3px solid ${c===current?'#fff':'transparent'};box-shadow:${c===current?'0 0 0 2px var(--accent)':'none'};transition:all 0.15s" data-clr="${c}"></div>`).join('')}
     </div>
     <div class="iw" style="margin-bottom:12px">
       <label class="il">Произвольный цвет</label>
       <input type="color" class="inp" id="cp-custom" value="${current||ac(name)}" style="height:44px;padding:4px;cursor:pointer" oninput="highlightSwatch(this.value)">
     </div>
     <div style="display:flex;gap:8px">
-      <button class="btn btn-p btn-fw" onclick="applyColor('${name}')">Применить</button>
-      ${current?`<button class="btn btn-g btn-sm" onclick="resetColor('${name}')">Сбросить</button>`:''}
+      <button class="btn btn-p btn-fw" onclick="applyColor(this.closest('[data-cpname]').dataset.cpname)">Применить</button>
+      ${current?`<button class="btn btn-g btn-sm" onclick="resetColor(this.closest('[data-cpname]').dataset.cpname)">Сбросить</button>`:''}
+    </div>
     </div>`;
   openModal('m-debt-detail');initializeIcons();
 }
@@ -2352,8 +2356,8 @@ function renderSettingGroups(){
     return `<div style="display:flex;align-items:center;gap:10px;padding:11px 13px;background:var(--s1);border:1px solid ${g.type==='couple'?'rgba(255,95,110,0.25)':'rgba(245,158,11,0.25)'};border-radius:var(--rsm)">
       <span style="font-size:1.1rem">${icon}</span>
       <div style="flex:1">
-        <div style="font-weight:600;font-size:0.86rem">${lbl}</div>
-        <div style="font-size:0.75rem;color:var(--t2)">${g.members.map(n=>`<span style="color:${ac(n)}">${n}</span>`).join(' + ')}</div>
+        <div style="font-weight:600;font-size:0.86rem">${escHtml(lbl)}</div>
+        <div style="font-size:0.75rem;color:var(--t2)">${g.members.map(n=>`<span style="color:${ac(n)}">${escHtml(n)}</span>`).join(' + ')}</div>
       </div>
       ${S.isAdmin?`<button class="btn btn-g btn-sm btn-ic" onclick="removeGroup('${g.id}')"><i data-lucide="trash-2" style="width:12px;height:12px"></i></button>`:''}
     </div>`
@@ -2926,7 +2930,7 @@ Return ONLY valid JSON:
   showMenuPicker();
 }
 
-function escHtml(s){return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+// escHtml определён в /js/dom-utils.js
 
 function showParsed(title,mode){
   document.getElementById('sc-parsed-title').textContent=title;
@@ -2952,7 +2956,7 @@ function renderScanItems(){
       if(qty===1){
         // single item — click to assign
         const active=it.assignedTo===m.name;
-        return `<div onclick="${canAssign?`assignItem(${i},'${m.name}')`:''}"
+        return `<div data-item-idx="${i}" data-member-name="${escHtml(m.name)}" ${canAssign?'onclick="assignItem(parseInt(this.dataset.itemIdx),this.dataset.memberName)"':''}
           style="display:inline-flex;align-items:center;gap:3px;padding:3px 8px;border-radius:100px;
                  border:1.5px solid ${active?ac(m.name):'var(--b2)'};
                  background:${active?ac(m.name)+'22':'transparent'};
@@ -2960,8 +2964,8 @@ function renderScanItems(){
                  transition:all 0.12s;user-select:none">
           <div style="width:14px;height:14px;border-radius:50%;background:${ac(m.name)};
                       font-size:0.55rem;display:flex;align-items:center;justify-content:center;
-                      color:#fff;font-weight:700;flex-shrink:0">${m.name[0]}</div>
-          <span style="font-size:0.72rem;font-weight:${active?'700':'500'};color:${active?ac(m.name):'var(--t2)'}">${m.name}</span>
+                      color:#fff;font-weight:700;flex-shrink:0">${escHtml(m.name[0]||'?')}</div>
+          <span style="font-size:0.72rem;font-weight:${active?'700':'500'};color:${active?ac(m.name):'var(--t2)'}">${escHtml(m.name)}</span>
         </div>`;
       } else {
         // multi-qty item — +/- per person
@@ -2971,12 +2975,12 @@ function renderScanItems(){
                             background:${q>0?ac(m.name)+'22':'transparent'}">
           <div style="width:14px;height:14px;border-radius:50%;background:${ac(m.name)};
                       font-size:0.55rem;display:flex;align-items:center;justify-content:center;
-                      color:#fff;font-weight:700;flex-shrink:0">${m.name[0]}</div>
-          ${canAssign?`<button onclick="adjQty(${i},'${m.name}',-1)"
+                      color:#fff;font-weight:700;flex-shrink:0">${escHtml(m.name[0]||'?')}</div>
+          ${canAssign?`<button data-item-idx="${i}" data-member-name="${escHtml(m.name)}" data-delta="-1" onclick="adjQty(parseInt(this.dataset.itemIdx),this.dataset.memberName,-1)"
             style="border:none;background:none;color:var(--t2);cursor:pointer;padding:0 2px;font-size:1.1rem;line-height:1;font-weight:700">−</button>`:''}
           <span style="font-family:var(--mono);font-size:0.75rem;font-weight:700;min-width:11px;text-align:center;
                        color:${q>0?ac(m.name):'var(--t3)'}">${q}</span>
-          ${canAssign?`<button onclick="adjQty(${i},'${m.name}',1)"
+          ${canAssign?`<button data-item-idx="${i}" data-member-name="${escHtml(m.name)}" data-delta="1" onclick="adjQty(parseInt(this.dataset.itemIdx),this.dataset.memberName,1)"
             style="border:none;background:none;color:var(--t2);cursor:pointer;padding:0 2px;font-size:1.1rem;line-height:1;font-weight:700">+</button>`:''}
         </div>`;
       }
@@ -3062,7 +3066,7 @@ function updateReceiptSummary(){
     <div style="font-size:0.68rem;color:var(--t3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">Итог по участникам</div>
     ${S.members.filter(m=>personAmt[m.name]>0.001).map(m=>`
     <div style="display:flex;justify-content:space-between;font-size:0.82rem;margin-bottom:3px">
-      <span style="color:${ac(m.name)};font-weight:500">${m.name}</span>
+      <span style="color:${ac(m.name)};font-weight:500">${escHtml(m.name)}</span>
       <span style="font-family:var(--mono);font-weight:600">${fm(personAmt[m.name])} €</span>
     </div>`).join('')}
   </div>`;
@@ -3073,11 +3077,11 @@ function renderAssignPayer(){
   if(!el)return;
   el.innerHTML=S.members.map(m=>{
     const canSelect=S.isAdmin||m.name===S.me;
-    return `<div class="wp ${m.name===S.me?'on':''}" data-ap="${m.name}"
-      ${canSelect?`onclick="selAP(this,'${m.name}')"`:''}
+    return `<div class="wp ${m.name===S.me?'on':''}" data-ap="${escHtml(m.name)}"
+      ${canSelect?'onclick="selAP(this,this.dataset.ap)"':''}
       style="${!canSelect?'opacity:0.38;cursor:default;pointer-events:none':''}">
-      <div class="av av-sm" style="background:${ac(m.name)}">${m.name[0]}</div>
-      <span style="color:${ac(m.name)};font-weight:600">${m.name}</span>
+      <div class="av av-sm" style="background:${ac(m.name)}">${escHtml(m.name[0]||'?')}</div>
+      <span style="color:${ac(m.name)};font-weight:600">${escHtml(m.name)}</span>
     </div>`;
   }).join('');
 }
@@ -3131,9 +3135,9 @@ function showMenuPicker(){
 function renderMenuPicker(){
   // Person buttons
   document.getElementById('sc-pick-persons').innerHTML=S.members.map(m=>
-    `<button class="btn btn-sm ${m.name===S.scan.menuPaidBy?'btn-p':'btn-s'}" onclick="setMenuPerson('${m.name}')">
-      <div class="av av-sm" style="background:${ac(m.name)}">${m.name[0]}</div>
-      <span style="color:${m.name===S.scan.menuPaidBy?'#fff':ac(m.name)};font-weight:600">${m.name}</span>
+    `<button class="btn btn-sm ${m.name===S.scan.menuPaidBy?'btn-p':'btn-s'}" data-name="${escHtml(m.name)}" onclick="setMenuPerson(this.dataset.name)">
+      <div class="av av-sm" style="background:${ac(m.name)}">${escHtml(m.name[0]||'?')}</div>
+      <span style="color:${m.name===S.scan.menuPaidBy?'#fff':ac(m.name)};font-weight:600">${escHtml(m.name)}</span>
     </button>`).join('');
   // Items (current person = who is selecting, default me)
   if(!S.scan.menuPerson)S.scan.menuPerson=S.me;
@@ -3142,18 +3146,18 @@ function renderMenuPicker(){
     const ok=sel.includes(i);
     return `<div class="mpick ${ok?'ok':''}" onclick="toggleMenuItem(${i})">
       <div class="mchk">${ok?'✓':''}</div>
-      <div style="flex:1"><div style="font-size:0.86rem;font-weight:500">${it.name}</div>${it.desc?`<div style="font-size:0.72rem;color:var(--t2)">${it.desc}</div>`:''}</div>
+      <div style="flex:1"><div style="font-size:0.86rem;font-weight:500">${escHtml(it.name)}</div>${it.desc?`<div style="font-size:0.72rem;color:var(--t2)">${escHtml(it.desc)}</div>`:''}</div>
       <div style="font-family:var(--mono);font-weight:600;font-size:0.86rem">${fm(it.price)} €</div>
     </div>`
   }).join('');
   // Payer (who pays the bill)
   document.getElementById('sc-pick-payer').innerHTML=S.members.map(m=>{
     const canSelect=S.isAdmin||m.name===S.me;
-    return `<div class="wp ${m.name===S.scan.menuPaidBy?'on':''}" data-mpayer="${m.name}"
-      ${canSelect?`onclick="setMenuPaidBy('${m.name}')"`:''}
+    return `<div class="wp ${m.name===S.scan.menuPaidBy?'on':''}" data-mpayer="${escHtml(m.name)}"
+      ${canSelect?'onclick="setMenuPaidBy(this.dataset.mpayer)"':''}
       style="${!canSelect?'opacity:0.38;cursor:default;pointer-events:none':''}">
-      <div class="av av-sm" style="background:${ac(m.name)}">${m.name[0]}</div>
-      <span style="color:${ac(m.name)};font-weight:600">${m.name}</span>
+      <div class="av av-sm" style="background:${ac(m.name)}">${escHtml(m.name[0]||'?')}</div>
+      <span style="color:${ac(m.name)};font-weight:600">${escHtml(m.name)}</span>
     </div>`;
   }).join('');
   updMenuTotals();initializeIcons()
@@ -3172,7 +3176,7 @@ function updMenuTotals(){
     const sum=sel.reduce((s,i)=>s+(S.scan.items[i]?.price||0),0);
     grand+=sum;
     return `<div style="display:flex;justify-content:space-between;font-size:0.8rem;color:${sum>0?ac(m.name):'var(--t3)'}">
-      <span>${m.name} (${sel.length} поз.)</span><span style="font-family:var(--mono)">${fm(sum)} €</span>
+      <span>${escHtml(m.name)} (${sel.length} поз.)</span><span style="font-family:var(--mono)">${fm(sum)} €</span>
     </div>`
   }).join('');
   document.getElementById('sc-pick-grand').textContent=fm(grand)+' €';

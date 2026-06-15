@@ -7,7 +7,7 @@
 // v3.0: локальный lucide.js, qrcode.min.js; убран CDN-кэш; нет Google Fonts
 // ============================================================
 
-const SW_VERSION   = '3.0';
+const SW_VERSION   = '4.0';
 const CACHE_STATIC = `splitaway-static-${SW_VERSION}`;
 
 // Ресурсы, которые кэшируем при установке (все локальные — нет CDN)
@@ -21,6 +21,7 @@ const PRECACHE_URLS = [
   '/js/supabase.js',
   '/js/sb-config.js',
   '/js/sb-client.js',
+  '/js/dom-utils.js',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
 ];
