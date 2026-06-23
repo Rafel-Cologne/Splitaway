@@ -3,8 +3,7 @@ node_modules/
 *.log
 .DS_Store
 dist/
-# Supabase credentials — не коммитим в git
-public/js/sb-config.js
+# Supabase anon key is public by design — sb-config.js is committed
 # Тестовые фото чеков и результаты OCR (могут содержать персональные данные)
 test-receipts/*.jpg
 test-receipts/*.jpeg
