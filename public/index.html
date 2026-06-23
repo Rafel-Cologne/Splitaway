@@ -170,6 +170,28 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
 .hero::before{content:'';position:absolute;inset:0;background:radial-gradient(circle at 30% 20%,rgba(108,99,255,0.09) 0%,transparent 55%),radial-gradient(circle at 70% 80%,rgba(34,211,160,0.06) 0%,transparent 55%);pointer-events:none}
 .hero-amt{font-size:2.8rem;font-weight:700;letter-spacing:-0.04em;font-family:var(--mono)}
 
+/* DASH BACKGROUND IMAGE */
+#pg-dash{position:relative}
+#dash-bg-layer{position:absolute;top:0;left:0;right:0;height:290px;z-index:0;overflow:hidden;pointer-events:none}
+/* Сдвигаем к городу (правая часть фото), убираем тёмный левый угол */
+#dash-bg-layer img{width:100%;height:100%;object-fit:cover;object-position:72% 35%}
+/* Лёгкий оверлей: только сверху и снизу, не закрывает цифры */
+#dash-bg-layer::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,0.42) 0%,rgba(0,0,0,0.0) 38%,rgba(0,0,0,0.0) 58%,var(--bg) 100%)}
+/* Светлая тема: нижняя часть фадится в светлый фон */
+[data-theme=light] #dash-bg-layer::after{background:linear-gradient(180deg,rgba(0,0,0,0.50) 0%,rgba(0,0,0,0.05) 38%,rgba(0,0,0,0.0) 55%,rgba(238,238,250,1) 100%)}
+@media(prefers-color-scheme:light){:root:not([data-theme=dark]) #dash-bg-layer::after{background:linear-gradient(180deg,rgba(0,0,0,0.50) 0%,rgba(0,0,0,0.05) 38%,rgba(0,0,0,0.0) 55%,rgba(238,238,250,1) 100%)}}
+#pg-dash .topbar{background:linear-gradient(to bottom,rgba(0,0,0,0.55) 70%,transparent);position:relative;z-index:51}
+/* Текст topbar всегда белый (фото тёмное), в любой теме */
+#pg-dash .topbar .tb-title,#pg-dash .topbar .tb-sub{color:#fff!important}
+#pg-dash .topbar .btn-g{color:rgba(255,255,255,0.85)!important;border-color:rgba(255,255,255,0.22)!important;background:rgba(0,0,0,0.28)!important}
+#pg-dash .topbar .btn-s{background:rgba(0,0,0,0.35)!important;border-color:rgba(255,255,255,0.20)!important;color:#fff!important}
+#pg-dash .topbar .pulse{border-color:rgba(255,255,255,0.3)!important}
+#pg-dash .scr{position:relative;z-index:1}
+/* Hero card: стекло, текст всегда белый */
+#pg-dash .hero{background:rgba(0,0,0,0.28);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-color:rgba(255,255,255,0.12);color:#fff!important}
+#pg-dash .hero::before{display:none}
+#pg-dash .hero *{color:#fff!important}
+
 /* DEBT ROW */
 .dr{display:flex;align-items:center;gap:11px;padding:13px 15px;background:var(--s1);border:1px solid var(--b1);border-radius:var(--rsm)}
 .da{font-family:var(--mono);font-weight:600;margin-left:auto;flex-shrink:0}
@@ -334,6 +356,19 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
       <div style="font-size:1.05rem;font-weight:700">Выберите ваше имя</div>
       <div style="font-size:0.83rem;color:var(--t2)">Поездка: <span id="ob-pick-trip" style="color:var(--text);font-weight:600"></span></div>
       <div id="ob-pick-list" style="display:flex;flex-direction:column;gap:7px"></div>
+      <!-- Подсказка для веб-пользователей -->
+      <div id="ob-web-hint" style="display:none;padding:10px 12px;background:rgba(108,99,255,0.07);border:1px solid rgba(108,99,255,0.15);border-radius:var(--rsm);font-size:0.78rem;color:var(--t2);text-align:center">
+        📱 Вы используете веб-версию Splitaway.<br>Для полного доступа установите приложение на Android.
+      </div>
+    </div>
+    <!-- Loading state (автоподключение по ссылке/QR) -->
+    <div id="ob-loading" style="display:none;flex-direction:column;align-items:center;gap:20px;padding:24px 0">
+      <div class="spin" style="width:38px;height:38px;border-width:3px"></div>
+      <div style="text-align:center">
+        <div id="ob-loading-msg" style="font-size:1.05rem;font-weight:700">Открываем поездку…</div>
+        <div id="ob-loading-sub" style="font-size:0.82rem;color:var(--t2);margin-top:5px"></div>
+      </div>
+      <button id="ob-loading-retry" onclick="showOb('ob-s1')" class="btn btn-g btn-sm" style="display:none">← Ввести код вручную</button>
     </div>
   </div>
 </div>
@@ -343,6 +378,7 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
 
   <!-- DASHBOARD -->
   <div class="page active" id="pg-dash">
+    <div id="dash-bg-layer"><img src="top.png" alt=""></div>
     <div class="topbar">
       <div><div class="tb-title" id="app-trip-name"></div><div class="tb-sub" id="app-trip-sub"></div></div>
       <div style="display:flex;align-items:center;gap:8px">
@@ -635,7 +671,7 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
   <nav class="nav">
     <div class="nav-items">
       <button class="ni active" onclick="goPage('pg-dash',this)"><i data-lucide="home"></i><span>Главная</span></button>
-      <button class="ni" onclick="goPage('pg-exp',this)"><i data-lucide="receipt"></i><span>Расходы</span></button>
+      <button class="ni" onclick="goPage('pg-exp',this)"><svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10h12"/><path d="M4 14h9"/><path d="M19 6a7.7 7.7 0 0 0-5.2-2A7.9 7.9 0 0 0 6 12c0 4.4 3.5 8 7.8 8 2 0 3.8-.8 5.2-2"/></svg><span>Расходы</span></button>
       <button class="ni" onclick="goPage('pg-scan',this)"><i data-lucide="scan"></i><span>Сканер</span></button>
       <button class="ni" onclick="goPage('pg-bal',this)"><i data-lucide="bar-chart-2"></i><span>Балансы</span></button>
       <button class="ni" onclick="goPage('pg-cash',this)"><i data-lucide="wallet"></i><span>Касса</span></button>
@@ -732,7 +768,7 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
     </div>
     <!-- Order text -->
     <div class="iw">
-      <label class="il">Что заказал?</label>
+      <label class="il" id="mo-order-label">Что заказал?</label>
       <textarea class="inp" id="mo-txt" placeholder="Пиво 2 по 4€&#10;Салат за 7,50€&#10;Пицца Маргарита 12.90&#10;3 воды - 1.5€" style="min-height:130px;font-size:0.88rem"></textarea>
     </div>
     <!-- Parse button -->
@@ -753,12 +789,14 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
       </div>
       <!-- Payer -->
       <div class="iw">
-        <label class="il">Кто оплатил?</label>
+        <label class="il" id="mo-payer-label">Кто оплатил?</label>
         <div id="mo-payer" style="display:flex;gap:7px;flex-wrap:wrap"></div>
       </div>
-      <!-- Save -->
-      <button class="btn btn-p btn-fw" onclick="saveMyOrder()"><i data-lucide="check" style="width:14px;height:14px"></i> Сохранить расход</button>
     </div>
+  </div>
+  <!-- Sticky save button — always visible at bottom when items are added -->
+  <div id="mo-save-footer" style="display:none;padding-top:10px;border-top:1px solid var(--b1);margin-top:4px;flex-shrink:0">
+    <button class="btn btn-p btn-fw" onclick="saveMyOrder()"><i data-lucide="check" style="width:14px;height:14px"></i> Сохранить расход</button>
   </div>
 </div></div>
 
@@ -818,6 +856,20 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
   <div class="iw"><label class="il">Имя</label><input class="inp" id="am-name"></div>
   <div class="iw"><label class="il">Пол</label><select class="inp" id="am-gender"><option value="m">М — Мужской</option><option value="f">Ж — Женский</option></select></div>
   <button class="btn btn-p btn-fw" onclick="saveMember()"><i data-lucide="check" style="width:15px;height:15px"></i> Добавить</button>
+</div></div>
+
+<!-- EDIT SETTLED DEBT (admin only) -->
+<div class="ov" id="m-edit-settled"><div class="mdl">
+  <div class="mdl-handle"></div>
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+    <div class="mdl-title">Редактировать погашение</div>
+    <button class="btn btn-g btn-sm btn-ic" onclick="closeModal('m-edit-settled')"><i data-lucide="x" style="width:15px;height:15px"></i></button>
+  </div>
+  <input type="hidden" id="es-id">
+  <div class="iw"><label class="il">Сумма (€)</label><input class="inp" type="number" step="0.01" min="0.01" id="es-amount" onkeydown="if(event.key==='Enter')saveEditSettled()"></div>
+  <div class="iw"><label class="il">Пометка / причина изменения</label><input class="inp" id="es-note" placeholder="Необязательно"></div>
+  <div id="es-log" style="margin-top:6px"></div>
+  <button class="btn btn-p btn-fw" onclick="saveEditSettled()" style="margin-top:12px"><i data-lucide="check" style="width:15px;height:15px"></i> Сохранить</button>
 </div></div>
 
 <script>
@@ -883,6 +935,7 @@ function owes(name){return mg(name)==='f'?'должна':'должен'}
 function fm(n){return (Math.round(n*100)/100).toLocaleString('ru-RU',{minimumFractionDigits:2,maximumFractionDigits:2})}
 function today(){return new Date().toISOString().split('T')[0]}
 function fdate(s){if(!s)return '';const d=new Date(s+'T12:00:00');return d.toLocaleDateString('ru-RU',{day:'numeric',month:'long'})}
+function fdatetime(iso){if(!iso)return '';const d=new Date(iso);return d.toLocaleDateString('ru-RU',{day:'numeric',month:'short'})+' '+d.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})}
 function uid(){return crypto.randomUUID()}
 
 // ── API URL: в браузере/PWA — относительный путь, в Capacitor (Android) — абсолютный Netlify URL
@@ -927,7 +980,7 @@ function units(name){const g=groupOf(name);return g?g.members.length:1}
 // =======================================================
 // ONBOARDING
 // =======================================================
-function showOb(id){['ob-s1','ob-create','ob-pick'].forEach(x=>{const el=document.getElementById(x);el.style.display=x===id?'flex':'none'})}
+function showOb(id){['ob-s1','ob-create','ob-pick','ob-loading'].forEach(x=>{const el=document.getElementById(x);if(el)el.style.display=x===id?'flex':'none'})}
 
 // Create trip temp members
 function ctAddMember(){
@@ -1012,6 +1065,44 @@ function renderPickList(){
       <span style="color:var(--t3);font-size:0.73rem;margin-left:auto">${m.gender==='f'?'Ж':'М'}</span>
     </button>`).join('');
 }
+// ── ПРИСОЕДИНЕНИЕ ПО QR/ССЫЛКЕ — плавный flow без мигания формы ──
+async function handleWebJoin(tripId, token){
+  tripId=tripId.trim().toUpperCase();
+  showOb('ob-loading');
+  document.getElementById('ob-loading-msg').textContent='Открываем поездку…';
+  document.getElementById('ob-loading-sub').textContent='';
+  document.getElementById('ob-loading-retry').style.display='none';
+  if(token) window._pendingInviteToken=token;
+  try{
+    const ok=await loadFromSupabase(tripId);
+    if(ok){
+      S.isAdmin=false;
+      if(token){
+        S.inviteToken=token;
+        localStorage.setItem('sw_invite_'+tripId,token);
+      } else {
+        // Проверяем localStorage (повторный визит)
+        const cached=localStorage.getItem('sw_invite_'+tripId);
+        if(cached)S.inviteToken=cached;
+      }
+      // Показываем подсказку о веб-версии на не-нативных устройствах
+      const isNative=window.Capacitor?.isNativePlatform?.();
+      document.getElementById('ob-web-hint').style.display=isNative?'none':'block';
+      showOb('ob-pick');
+      renderPickList();
+    } else {
+      document.getElementById('ob-loading-msg').textContent='❌ Поездка не найдена';
+      document.getElementById('ob-loading-sub').textContent='Проверьте ссылку или введите код вручную';
+      document.getElementById('ob-loading-retry').style.display='';
+    }
+  } catch(e){
+    console.warn('[WebJoin]',e);
+    document.getElementById('ob-loading-msg').textContent='❌ Ошибка соединения';
+    document.getElementById('ob-loading-sub').textContent=e.message||'Проверьте интернет и попробуйте снова';
+    document.getElementById('ob-loading-retry').style.display='';
+  }
+}
+
 async function joinTrip(){
   const code=document.getElementById('ob-code').value.trim().toUpperCase();
   if(!code){toast('Введите код поездки');return}
@@ -1189,7 +1280,7 @@ function renderMembersList(){
             </div>
             <div style="text-align:right;flex-shrink:0">
               <div style="font-family:var(--mono);font-weight:700;font-size:0.86rem">${fm(paid[n]||0)}</div>
-              <div style="font-size:0.68rem;color:var(--t3)">€ оплатил</div>
+              <div style="font-size:0.68rem;color:var(--t3)">€ ${mg(n)==='f'?'оплатила':'оплатил'}</div>
             </div>
           </div>`;
         }).join('')}
@@ -1211,7 +1302,7 @@ function renderMembersList(){
         </div>
         <div style="text-align:right;flex-shrink:0">
           <div style="font-family:var(--mono);font-weight:700;font-size:0.88rem">${fm(paid[m.name]||0)}</div>
-          <div style="font-size:0.68rem;color:var(--t3)">€ оплатил</div>
+          <div style="font-size:0.68rem;color:var(--t3)">€ ${m.gender==='f'?'оплатила':'оплатил'}</div>
         </div>
       </div>`);
   });
@@ -1575,6 +1666,86 @@ function simplify(bal){
   return txs
 }
 
+// ── ГРУППОВЫЕ ДОЛГИ: объединяем участников группы в один долг ──
+function buildGroupedDebts(rawDebts){
+  const getGKey=name=>{const g=groupOf(name);return g?'grp§'+g.members.slice().sort().join('§'):name};
+  const keyInfo=key=>{
+    if(!key.startsWith('grp§')){return{key,isGroup:false,members:[key],label:key}}
+    const members=key.slice(4).split('§');
+    const g=S.groups.find(gg=>gg.members.slice().sort().join('§')===members.join('§'));
+    const lbl=g?.type==='couple'?'♥ Пара':(g?.label||members.join(' & '));
+    return{key,isGroup:true,members,label:lbl,group:g}
+  };
+  const net={};
+  rawDebts.forEach(d=>{
+    const fk=getGKey(d.from),tk=getGKey(d.to);
+    if(fk===tk)return; // внутренний долг пары — скрываем
+    const pk=[fk,tk].sort().join('<<<');
+    if(!net[pk])net[pk]={ak:fk,bk:tk,val:0};
+    if(fk===net[pk].ak)net[pk].val+=d.amount;else net[pk].val-=d.amount;
+  });
+  return Object.values(net).filter(e=>Math.abs(e.val)>0.01).map(e=>{
+    const fromKey=e.val>0?e.ak:e.bk,toKey=e.val>0?e.bk:e.ak;
+    return{fromInfo:keyInfo(fromKey),toInfo:keyInfo(toKey),amount:Math.abs(e.val)}
+  });
+}
+function renderGroupedDebtRow(gd,numbered){
+  const{fromInfo,toInfo,amount}=gd;
+  const fromAv=fromInfo.isGroup
+    ?`<div style="position:relative;width:34px;height:26px;flex-shrink:0">${fromInfo.members.slice(0,2).map((m,i)=>`<div class="av av-sm" style="background:${ac(m)};position:absolute;${i===0?'left:0':'left:12px'};top:0;width:22px;height:22px;font-size:0.63rem;box-shadow:0 0 0 2px var(--bg)">${escHtml(m[0]||'?')}</div>`).join('')}</div>`
+    :`<div class="av av-sm" style="background:${ac(fromInfo.label)}">${escHtml(fromInfo.label[0]||'?')}</div>`;
+  const fromLbl=fromInfo.isGroup
+    ?`<span style="color:var(--red);font-weight:700">${escHtml(fromInfo.label)}</span><span style="font-size:0.71rem;color:var(--t2)"> (${fromInfo.members.map(escHtml).join(', ')})</span>`
+    :`<span style="color:${ac(fromInfo.label)};font-weight:600">${escHtml(fromInfo.label)}</span>`;
+  const toLbl=toInfo.isGroup
+    ?`<span style="color:var(--red);font-weight:700">${escHtml(toInfo.label)}</span>`
+    :`<span style="color:${ac(toInfo.label)};font-weight:600">${escHtml(toInfo.label)}</span>`;
+  const owesStr=fromInfo.members.length>1?'должны':owes(fromInfo.members[0]);
+  const numBadge=numbered!==undefined?`<div style="width:19px;height:19px;border-radius:50%;background:var(--s2);display:flex;align-items:center;justify-content:center;font-size:0.68rem;font-weight:700;color:var(--t2);flex-shrink:0">${numbered+1}</div>`:'';
+  const clickable=(!fromInfo.isGroup&&!toInfo.isGroup)?`onclick="showDebtDetail('${escHtml(fromInfo.members[0])}','${escHtml(toInfo.members[0])}',${amount})"`:
+    `onclick="showGroupDebtDetail(${JSON.stringify(fromInfo)},${JSON.stringify(toInfo)},${amount})"`;
+  const fm2=JSON.stringify(fromInfo.members),tm2=JSON.stringify(toInfo.members),fl=JSON.stringify(fromInfo.label),tl=JSON.stringify(toInfo.label);
+  const settleBtn=numbered===undefined?`<button class="btn btn-green btn-sm" onclick="event.stopPropagation();settleGroupedDebt(${fm2},${tm2},${amount},${fl},${tl})" title="Отметить как погашен" style="padding:5px 10px;font-size:0.75rem">✓</button>`:'';
+  return `<div class="dr" style="cursor:pointer" ${clickable}>${numBadge}${fromAv}<div style="flex:1;font-size:0.86rem;min-width:0">${fromLbl}<span style="color:var(--t2)"> ${owesStr} </span>${toLbl}</div><div style="display:flex;align-items:center;gap:7px"><div class="da neg">${fm(amount)} €</div>${settleBtn}</div></div>`;
+}
+function settleGroupedDebt(fromMembers,toMembers,totalAmount,fromLabel,toLabel){
+  if(!S.settledDebts)S.settledDebts=[];
+  const groupSettleId=uid();
+  // Находим индивидуальные долги, входящие в этот групповой
+  const bal=calcBal();const rawDebts=simplify(bal);
+  const matching=rawDebts.filter(d=>fromMembers.includes(d.from)&&toMembers.includes(d.to));
+  if(matching.length===0){
+    S.settledDebts.push({id:uid(),from:fromMembers[0],to:toMembers[0],amount:totalAmount,date:today(),groupSettleId});
+  } else {
+    matching.forEach(d=>S.settledDebts.push({id:uid(),from:d.from,to:d.to,amount:d.amount,date:today(),groupSettleId}));
+  }
+  save();renderBalances();renderDash();
+  toast('✅ Погашено: '+fromLabel+' → '+toLabel+' '+fm(totalAmount)+' €');
+}
+function showGroupDebtDetail(fromInfo,toInfo,amount){
+  // Показываем детальную разбивку по участникам группы
+  const bal=calcBal();const rawDebts=simplify(bal);
+  const parts=rawDebts.filter(d=>fromInfo.members.includes(d.from)&&toInfo.members.includes(d.to));
+  const fm2=JSON.stringify(fromInfo.members),tm2=JSON.stringify(toInfo.members),fl=JSON.stringify(fromInfo.label),tl=JSON.stringify(toInfo.label);
+  const html=`<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px">
+    <div><div style="font-weight:700;font-size:1.1rem">Долг группы</div>
+    <div style="font-size:0.82rem;color:var(--t2);margin-top:3px"><span style="color:var(--red);font-weight:700">${escHtml(fromInfo.label)}</span> → <span style="color:${ac(toInfo.label)};font-weight:600">${escHtml(toInfo.label)}</span></div></div>
+    <button class="btn btn-g btn-sm btn-ic" onclick="closeModal('m-debt-detail')"><i data-lucide="x" style="width:15px;height:15px"></i></button>
+  </div>
+  <div class="hero" style="padding:16px;text-align:left;margin-bottom:14px">
+    <div style="font-size:0.76rem;color:var(--t2);margin-bottom:4px">Итого для группы</div>
+    <div style="font-size:2rem;font-weight:700;font-family:var(--mono);color:var(--red)">${fm(amount)} €</div>
+  </div>
+  ${parts.length>0?`<div style="font-size:0.75rem;color:var(--t2);font-weight:600;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.05em">Разбивка по участникам</div>`:''}
+  ${parts.map(d=>`<div class="dr" style="cursor:default"><div class="av av-sm" style="background:${ac(d.from)}">${escHtml(d.from[0]||'?')}</div>
+    <div style="flex:1;font-size:0.85rem"><span style="color:${ac(d.from)};font-weight:600">${escHtml(d.from)}</span> → <span style="color:${ac(d.to)};font-weight:600">${escHtml(d.to)}</span></div>
+    <div class="da neg">${fm(d.amount)} €</div>
+  </div>`).join('')}
+  <button class="btn btn-green btn-fw" style="margin-top:16px" onclick="closeModal('m-debt-detail');settleGroupedDebt(${fm2},${tm2},${amount},${fl},${tl})"><i data-lucide="check" style="width:15px;height:15px"></i> Погасить всё</button>`;
+  document.getElementById('m-debt-detail-content').innerHTML=html;
+  openModal('m-debt-detail');initializeIcons();
+}
+
 function balTab(tab,btn){
   S.balTab=tab;
   document.querySelectorAll('#pg-bal .tab').forEach(t=>t.classList.remove('active'));
@@ -1585,77 +1756,60 @@ function renderBalances(){
   const bal=calcBal();const debts=simplify(bal);
   if(S.balTab==='debts'){
     const settled=S.settledDebts||[];
-    if(!debts.length&&!settled.length){el.innerHTML='<div class="emp"><div class="emp-ic">🎉</div><div class="emp-t">Все в расчёте!</div></div>';return}
-    let html=debts.map((d,i)=>`
-      <div class="dr" style="cursor:pointer" data-from="${escHtml(d.from)}" data-to="${escHtml(d.to)}" data-amount="${d.amount}" onclick="showDebtDetail(this.dataset.from,this.dataset.to,parseFloat(this.dataset.amount))">
-        <div class="av av-sm" style="background:${ac(d.from)}">${escHtml(d.from[0]||'?')}</div>
-        <div style="flex:1;font-size:0.86rem">
-          <span style="color:${ac(d.from)};font-weight:600">${escHtml(d.from)}</span>
-          <span style="color:var(--t2)"> ${owes(d.from)} </span>
-          <span style="color:${ac(d.to)};font-weight:600">${escHtml(d.to)}</span>
-        </div>
-        <div style="display:flex;align-items:center;gap:7px">
-          <div class="da neg">${fm(d.amount)} €</div>
-          <button class="btn btn-green btn-sm" onclick="event.stopPropagation();settleDebt(this.closest('[data-from]').dataset.from,this.closest('[data-from]').dataset.to,parseFloat(this.closest('[data-from]').dataset.amount))" title="Отметить как погашен" style="padding:5px 10px;font-size:0.75rem">✓</button>
-        </div>
-      </div>`).join('');
-    if(settled.length){
-      html+=`<div style="font-size:0.73rem;color:var(--t2);font-weight:600;letter-spacing:0.06em;text-transform:uppercase;padding:8px 4px 4px">Погашённые</div>`;
-      html+=[...settled].reverse().map(sd=>`
-        <div class="dr" style="opacity:0.55">
-          <div class="av av-sm" style="background:${ac(sd.from)}">${escHtml(sd.from[0]||'?')}</div>
-          <div style="flex:1;font-size:0.86rem;text-decoration:line-through">
-            <span style="color:${ac(sd.from)};font-weight:600">${escHtml(sd.from)}</span>
-            <span style="color:var(--t2)"> → </span>
-            <span style="color:${ac(sd.to)};font-weight:600">${escHtml(sd.to)}</span>
-          </div>
-          <div style="display:flex;align-items:center;gap:7px">
-            <div class="da" style="text-decoration:line-through">${fm(sd.amount)} €</div>
-            <button class="btn btn-g btn-sm" onclick="unsettle('${sd.id}')" title="Отменить погашение" style="padding:5px 8px;font-size:0.72rem">↩</button>
-          </div>
-        </div>`).join('');
-    }
+    const grouped=buildGroupedDebts(debts);
+    if(!grouped.length&&!settled.length){el.innerHTML='<div class="emp"><div class="emp-ic">🎉</div><div class="emp-t">Все в расчёте!</div></div>';return}
+    let html=grouped.map(gd=>renderGroupedDebtRow(gd)).join('');
+    html+=renderSettledArchive(settled);
     el.innerHTML=html;
   } else if(S.balTab==='persons'){
     const paid=calcPaid();const mx=Math.max(...Object.values(paid).filter(x=>x>0),1);
-    el.innerHTML=S.members.map(m=>{
+    const placed=new Set();let html='';
+    // Helper: render one person card
+    function personCard(m,noBorder){
       const net=bal[m.name]||0;
-      return `<div class="dr" style="flex-direction:column;align-items:flex-start;gap:7px;cursor:pointer" data-name="${escHtml(m.name)}" onclick="showPersonDetail(this.dataset.name)">
+      return `<div class="dr" style="flex-direction:column;align-items:flex-start;gap:7px;cursor:pointer${noBorder?';border-radius:0;border-left:none;border-right:none;border-bottom:none':''}" data-name="${escHtml(m.name)}" onclick="showPersonDetail(this.dataset.name)">
         <div style="display:flex;align-items:center;gap:10px;width:100%">
           <div class="av av-md" style="background:${ac(m.name)}">${escHtml(m.name[0]||'?')}</div>
-          <div style="flex:1"><div style="font-weight:600;color:${ac(m.name)}">${escHtml(m.name)}</div><div style="font-size:0.73rem;color:var(--t2)">Оплатил: ${fm(paid[m.name]||0)} €</div></div>
+          <div style="flex:1"><div style="font-weight:600;color:${ac(m.name)}">${escHtml(m.name)}</div><div style="font-size:0.73rem;color:var(--t2)">${m.gender==='f'?'Оплатила':'Оплатил'}: ${fm(paid[m.name]||0)} €</div></div>
           <div class="da ${net>=0?'pos':'neg'}">${net>=0?'+':''}${fm(net)} €</div>
         </div>
         <div class="pb" style="width:100%"><div class="pf" style="width:${Math.min(100,(paid[m.name]||0)/mx*100)}%;background:${net>=0?'var(--green)':'var(--red)'}"></div></div>
-      </div>`
-    }).join('')
+      </div>`;
+    }
+    // Render groups (pairs/families) first — members side by side + combined balance
+    S.groups.forEach(g=>{
+      const gm=g.members.map(n=>S.members.find(m=>m.name===n)).filter(Boolean);
+      if(!gm.length)return;
+      const isCouple=g.type==='couple';
+      const bc=isCouple?'rgba(255,95,110,0.25)':'rgba(245,158,11,0.25)';
+      const hc=isCouple?'rgba(255,95,110,0.08)':'rgba(245,158,11,0.08)';
+      const lbl=isCouple?'♥ Пара':`👨‍👩‍👧 ${g.label||'Семья'}`;
+      const lc=isCouple?'var(--red)':'var(--amber)';
+      // Суммарный баланс группы
+      const groupNet=gm.reduce((s,m)=>s+(bal[m.name]||0),0);
+      const groupPaid=gm.reduce((s,m)=>s+(paid[m.name]||0),0);
+      const netColor=groupNet>=0?'var(--green)':'var(--red)';
+      html+=`<div style="border:1px solid ${bc};border-radius:var(--r);overflow:hidden;margin-bottom:8px">
+        <div style="padding:6px 13px;background:${hc};display:flex;align-items:center;justify-content:space-between">
+          <div style="font-size:0.7rem;font-weight:700;color:${lc}">${lbl}</div>
+          <div style="font-size:0.75rem;font-weight:700;color:${netColor}">${groupNet>=0?'+':''}${fm(groupNet)} €</div>
+        </div>
+        <div style="padding:3px 13px 5px;background:${hc}">
+          <div style="font-size:0.68rem;color:var(--t2)">Оплатили вместе: ${fm(groupPaid)} €</div>
+        </div>
+        ${gm.map((m,i)=>{placed.add(m.name);return personCard(m,i>0);}).join('')}
+      </div>`;
+    });
+    // Remaining solo members
+    S.members.filter(m=>!placed.has(m.name)).forEach(m=>{html+=personCard(m,false);});
+    el.innerHTML=html
   } else {
     const settled=S.settledDebts||[];
     if(!debts.length&&!settled.length){el.innerHTML='<div class="emp"><div class="emp-ic">✅</div><div class="emp-t">Все чисто!</div></div>';return}
+    const groupedFinal=buildGroupedDebts(debts);
     let html=`<div class="card" style="background:var(--aglow);border-color:rgba(108,99,255,0.18);margin-bottom:7px"><div style="font-size:0.8rem;color:var(--ac2);font-weight:600;margin-bottom:3px">⚡ Оптимизированный расчёт</div><div style="font-size:0.76rem;color:var(--t2)">Минимум переводов</div></div>`;
-    html+=debts.map((d,i)=>`<div class="dr" style="cursor:pointer" data-from="${escHtml(d.from)}" data-to="${escHtml(d.to)}" data-amount="${d.amount}" onclick="showDebtDetail(this.dataset.from,this.dataset.to,parseFloat(this.dataset.amount))">
-      <div style="width:19px;height:19px;border-radius:50%;background:var(--s2);display:flex;align-items:center;justify-content:center;font-size:0.68rem;font-weight:700;color:var(--t2)">${i+1}</div>
-      <div class="av av-sm" style="background:${ac(d.from)}">${escHtml(d.from[0]||'?')}</div>
-      <div style="flex:1;font-size:0.86rem">
-        <span style="color:${ac(d.from)};font-weight:600">${escHtml(d.from)}</span>
-        <span style="color:var(--t3)"> → </span>
-        <span style="color:${ac(d.to)};font-weight:600">${escHtml(d.to)}</span>
-      </div>
-      <div class="da neg">${fm(d.amount)} €</div>
-    </div>`).join('');
-    if(settled.length){
-      html+=`<div style="font-size:0.73rem;color:var(--t2);font-weight:600;letter-spacing:0.06em;text-transform:uppercase;padding:8px 4px 4px;margin-top:4px">✅ Погашённые долги</div>`;
-      html+=[...settled].reverse().map(sd=>`
-        <div class="dr" style="opacity:0.5">
-          <div class="av av-sm" style="background:${ac(sd.from)}">${escHtml(sd.from[0]||'?')}</div>
-          <div style="flex:1;font-size:0.84rem;text-decoration:line-through;color:var(--t2)">
-            <span style="color:${ac(sd.from)};font-weight:600">${escHtml(sd.from)}</span>
-            <span> → </span>
-            <span style="color:${ac(sd.to)};font-weight:600">${escHtml(sd.to)}</span>
-          </div>
-          <div style="font-family:var(--mono);font-size:0.86rem;text-decoration:line-through;color:var(--t3)">${fm(sd.amount)} €</div>
-        </div>`).join('');
-    }
+    html+=groupedFinal.map((gd,i)=>renderGroupedDebtRow(gd,i)).join('');
+    html+=renderSettledArchive(settled);
     el.innerHTML=html;
   }
   initializeIcons()
@@ -1671,6 +1825,146 @@ function unsettle(id){
   S.settledDebts=(S.settledDebts||[]).filter(d=>d.id!==id);
   save();renderBalances();renderDash();
   toast('↩ Погашение отменено')
+}
+function deleteSettled(id){
+  if(!S.isAdmin){toast('❌ Только Админ');return}
+  if(!confirm('Удалить запись из архива?'))return;
+  S.settledDebts=(S.settledDebts||[]).filter(d=>d.id!==id);
+  save();renderBalances();renderDash();
+  toast('🗑 Удалено из архива')
+}
+function openEditSettled(id){
+  if(!S.isAdmin){toast('❌ Только Админ');return}
+  const sd=(S.settledDebts||[]).find(x=>x.id===id);
+  if(!sd)return;
+  document.getElementById('es-id').value=id;
+  document.getElementById('es-amount').value=sd.amount.toFixed(2);
+  document.getElementById('es-note').value=sd.note||'';
+  const log=sd.editLog||[];
+  const logEl=document.getElementById('es-log');
+  if(log.length){
+    logEl.innerHTML=`<div style="font-size:0.72rem;color:var(--t2);font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.05em">История изменений</div>`+
+      log.map(l=>`<div style="font-size:0.76rem;padding:7px 10px;background:var(--s1);border-radius:var(--rsm);margin-bottom:4px">
+        <div style="color:var(--t2);margin-bottom:2px">${fdatetime(l.ts)} · ${escHtml(l.by)}</div>
+        <span style="color:var(--red)">${fm(l.oldAmount)} €</span><span style="color:var(--t2)"> → </span><span style="color:var(--green)">${fm(l.newAmount)} €</span>
+        ${l.note?`<span style="color:var(--t2)"> · ${escHtml(l.note)}</span>`:''}
+      </div>`).join('');
+  } else {logEl.innerHTML='';}
+  openModal('m-edit-settled');initializeIcons();
+}
+function saveEditSettled(){
+  const id=document.getElementById('es-id').value;
+  const newAmt=parseFloat(document.getElementById('es-amount').value);
+  const note=document.getElementById('es-note').value.trim();
+  if(!id||isNaN(newAmt)||newAmt<=0){toast('⚠️ Введите корректную сумму');return}
+  const sd=(S.settledDebts||[]).find(x=>x.id===id);
+  if(!sd)return;
+  if(!sd.editLog)sd.editLog=[];
+  if(sd.amount!==newAmt){
+    sd.editLog.push({ts:new Date().toISOString(),by:S.me,oldAmount:sd.amount,newAmount:newAmt,note});
+    sd.amount=newAmt;
+  }
+  if(note)sd.note=note;
+  save();closeModal('m-edit-settled');renderBalances();renderDash();
+  toast('✏️ Запись обновлена');
+}
+
+// ── АРХИВ ПОГАШЕНИЙ — группировка по датам ──────────────────
+function renderSettledArchive(settled){
+  if(!settled||!settled.length)return '';
+  // Группируем записи по groupSettleId (одновременное погашение группы = один блок)
+  const processed=[];const seenGSI=new Set();
+  [...settled].forEach(sd=>{
+    if(sd.groupSettleId){
+      if(seenGSI.has(sd.groupSettleId))return;
+      seenGSI.add(sd.groupSettleId);
+      const siblings=settled.filter(x=>x.groupSettleId===sd.groupSettleId);
+      const totalAmt=siblings.reduce((s,x)=>s+x.amount,0);
+      const froms=[...new Set(siblings.map(x=>x.from))];
+      processed.push({...sd,_merged:true,_froms:froms,_tos:[...new Set(siblings.map(x=>x.to))],amount:totalAmt,_ids:siblings.map(x=>x.id),_editLog:sd.editLog||[]});
+    } else {
+      processed.push(sd);
+    }
+  });
+  // Группируем по дате (новые сверху)
+  const groups={};
+  processed.forEach(sd=>{const d=sd.date||'unknown';if(!groups[d])groups[d]=[];groups[d].push(sd);});
+  const dates=Object.keys(groups).sort((a,b)=>b.localeCompare(a));
+  const totalCount=processed.length;
+  let html=`<div style="display:flex;align-items:center;gap:7px;padding:10px 4px 6px;margin-top:4px">
+    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--t2)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+    <span style="font-size:0.73rem;color:var(--t2);font-weight:600;letter-spacing:0.06em;text-transform:uppercase">Архив погашений</span>
+    <span style="font-size:0.68rem;background:var(--s2);color:var(--t2);padding:1px 7px;border-radius:10px">${totalCount}</span>
+  </div>`;
+  dates.forEach((date,idx)=>{
+    const items=groups[date];
+    const total=items.reduce((s,sd)=>s+sd.amount,0);
+    const gId='arch-g-'+date.replace(/-/g,'');
+    const open=idx===0;
+    html+=`
+    <div style="border:1px solid var(--b1);border-radius:var(--rsm);overflow:hidden;margin-bottom:6px">
+      <div onclick="toggleArchiveGroup('${gId}')" style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--s1);cursor:pointer;user-select:none">
+        <span style="font-size:1rem">${open?'📂':'📁'}</span>
+        <div style="flex:1">
+          <div style="font-size:0.84rem;font-weight:600">${fdate(date)}</div>
+          <div style="font-size:0.7rem;color:var(--t2)">${items.length} погашено · ${fm(total)} €</div>
+        </div>
+        <svg id="${gId}-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--t2)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="transition:transform 0.2s;transform:rotate(${open?'0':'-90'}deg)"><polyline points="6 9 12 15 18 9"/></svg>
+      </div>
+      <div id="${gId}" style="display:${open?'flex':'none'};flex-direction:column">
+        ${items.map((sd,i)=>{
+          // Определяем отображение from/to
+          const isGroup=sd._merged&&sd._froms&&sd._froms.length>1;
+          const fromLabel=isGroup?'Пара':escHtml(sd.from);
+          const fromColor=isGroup?'var(--red)':ac(sd.from);
+          const toLabel=sd._tos&&sd._tos.length>1?'Пара':escHtml(sd._tos?sd._tos[0]:sd.to);
+          const toColor=sd._tos&&sd._tos.length>1?'var(--red)':ac(sd._tos?sd._tos[0]:sd.to);
+          const firstAv=sd._froms?sd._froms[0]:sd.from;
+          const hasEdits=(sd.editLog&&sd.editLog.length)||(sd._editLog&&sd._editLog.length);
+          const hasNote=sd.note;
+          // Кнопки: для слитых (grouped) записей — используем первый id; удаление удаляет все
+          const editId=sd._ids?sd._ids[0]:sd.id;
+          const adminBtns=S.isAdmin?`
+            <button class="btn btn-g btn-sm" onclick="openEditSettled('${sd._ids?sd._ids[0]:sd.id}')" title="Редактировать" style="padding:4px 8px;font-size:0.7rem">✏️</button>
+            <button class="btn btn-g btn-sm" onclick="${sd._ids?`[${sd._ids.map(x=>"'"+x+"'").join(',')}].forEach(deleteSettledSilent)`:`deleteSettled('${sd.id}')`}" title="Удалить" style="padding:4px 8px;font-size:0.7rem;color:var(--red)">🗑</button>
+          `:'<button class="btn btn-g btn-sm" onclick="unsettle(\''+( sd._ids?sd._ids[0]:sd.id )+'\')" title="Отменить" style="padding:4px 8px;font-size:0.7rem">↩</button>';
+          return `<div style="padding:9px 12px;${i?'border-top:1px solid var(--b1)':''}">
+            <div style="display:flex;align-items:center;gap:9px">
+              <div class="av av-sm" style="background:${ac(firstAv)}">${escHtml(firstAv[0]||'?')}</div>
+              <div style="flex:1;font-size:0.84rem;min-width:0">
+                <span style="color:${fromColor};font-weight:600">${fromLabel}</span>
+                <span style="color:var(--t3)"> → </span>
+                <span style="color:${toColor};font-weight:600">${toLabel}</span>
+                ${hasEdits?`<span style="font-size:0.65rem;background:rgba(245,158,11,0.18);color:var(--amber);padding:1px 5px;border-radius:4px;margin-left:4px">изменено</span>`:''}
+                ${isGroup?`<span style="font-size:0.65rem;background:rgba(255,95,110,0.12);color:var(--red);padding:1px 5px;border-radius:4px;margin-left:4px">пара</span>`:''}
+              </div>
+              <span style="font-family:var(--mono);font-size:0.86rem;font-weight:600;color:var(--green);white-space:nowrap">${fm(sd.amount)} €</span>
+              <div style="display:flex;gap:4px">${adminBtns}</div>
+            </div>
+            ${hasNote?`<div style="font-size:0.76rem;color:var(--t2);margin-top:5px;padding-left:36px">💬 ${escHtml(sd.note)}</div>`:''}
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+  });
+  return html;
+}
+// Тихое удаление (для группового погашения — удаляем все id)
+function deleteSettledSilent(id){
+  if(!S.isAdmin)return;
+  S.settledDebts=(S.settledDebts||[]).filter(d=>d.id!==id);
+  save();renderBalances();renderDash();
+}
+function toggleArchiveGroup(id){
+  const el=document.getElementById(id);
+  const icon=document.getElementById(id+'-icon');
+  if(!el)return;
+  const open=el.style.display!=='none';
+  el.style.display=open?'none':'flex';
+  if(icon)icon.style.transform=open?'rotate(-90deg)':'rotate(0deg)';
+  // swap folder emoji
+  const header=el.previousElementSibling;
+  if(header){const em=header.querySelector('span');if(em)em.textContent=open?'📁':'📂';}
 }
 
 // Detailed debt breakdown — what expenses contributed to this debt
@@ -1724,8 +2018,8 @@ function showDebtDetail(fromName, toName, totalAmt){
             <span>${l.exp.participants.length} уч.</span>
           </div>
           ${l.type==='owes'
-            ?`<div style="font-size:0.73rem;color:var(--t3);margin-top:4px">${escHtml(fromName)} участвовал в расходе — доля: ${fm(l.share)} €</div>`
-            :`<div style="font-size:0.73rem;color:var(--t3);margin-top:4px">${escHtml(fromName)} оплатил за ${escHtml(toName)} — доля ${escHtml(toName)}: ${fm(l.share)} €</div>`
+            ?`<div style="font-size:0.73rem;color:var(--t3);margin-top:4px">${escHtml(fromName)} ${mg(fromName)==='f'?'участвовала':'участвовал'} в расходе — доля: ${fm(l.share)} €</div>`
+            :`<div style="font-size:0.73rem;color:var(--t3);margin-top:4px">${escHtml(fromName)} ${mg(fromName)==='f'?'оплатила':'оплатил'} за ${escHtml(toName)} — доля ${escHtml(toName)}: ${fm(l.share)} €</div>`
           }
         </div>`).join('')}
     </div>
@@ -1747,7 +2041,7 @@ function showPersonDetail(name){
       <button class="btn btn-g btn-sm btn-ic" onclick="closeModal('m-debt-detail')"><i data-lucide="x" style="width:15px;height:15px"></i></button>
     </div>
     <div class="g2" style="margin-bottom:14px">
-      <div class="sbox"><div class="sv" style="color:var(--green)">${fm(paid[name]||0)} €</div><div class="sl">Оплатил</div></div>
+      <div class="sbox"><div class="sv" style="color:var(--green)">${fm(paid[name]||0)} €</div><div class="sl">${mg(name)==='f'?'Оплатила':'Оплатил'}</div></div>
       <div class="sbox"><div class="sv" style="color:${net>=0?'var(--green)':'var(--red)'}">${net>=0?'+':''}${fm(net)} €</div><div class="sl">Баланс</div></div>
     </div>
     <div style="font-size:0.76rem;color:var(--t2);font-weight:600;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">Все связанные расходы</div>
@@ -1764,7 +2058,7 @@ function showPersonDetail(name){
           </div>
           <div style="font-size:0.73rem;color:var(--t2);display:flex;gap:7px;flex-wrap:wrap">
             ${e.date?`<span>${fdate(e.date)}</span>`:''}
-            ${e.paidBy===name?`<span style="color:var(--green)">Оплатил: ${fm(e.amount)} €</span>`:''}
+            ${e.paidBy===name?`<span style="color:var(--green)">${mg(name)==='f'?'Оплатила':'Оплатил'}: ${fm(e.amount)} €</span>`:''}
             ${e.participants.includes(name)?`<span>Доля: ${fm(share)} €</span>`:''}
           </div>
         </div>`;
@@ -1971,6 +2265,7 @@ function openMyOrder(){
   document.getElementById('mo-txt').value='';
   document.getElementById('mo-result').style.display='none';
   document.getElementById('mo-loading').style.display='none';
+  document.getElementById('mo-save-footer').style.display='none';
   // Participant selector
   const pEl=document.getElementById('mo-participant');
   pEl.innerHTML=S.members.map(m=>{
@@ -1988,6 +2283,11 @@ function openMyOrder(){
 function selMoPerson(el){
   document.querySelectorAll('[data-mo-person]').forEach(b=>b.classList.remove('on'));
   el.classList.add('on');
+  // Update labels based on selected person's gender
+  const name=el.dataset.moPerson;
+  const g=mg(name);
+  document.getElementById('mo-order-label').textContent=g==='f'?'Что заказала?':'Что заказал?';
+  document.getElementById('mo-payer-label').textContent=g==='f'?'Кто оплатила?':'Кто оплатил?';
 }
 
 function selMoPayer(el){
@@ -2062,12 +2362,15 @@ Text:\n${t}`}]})
   }).join('')+treasury;
 
   document.getElementById('mo-result').style.display='flex';
+  document.getElementById('mo-save-footer').style.display='block';
+  // Scroll to show save button
+  setTimeout(()=>{const sc=document.querySelector('#m-my-order .mdl > div[style*="overflow-y"]');if(sc)sc.scrollTop=sc.scrollHeight;},50);
   initializeIcons();
 }
 
 function removeMoItem(idx){
   _moItems.splice(idx,1);
-  if(!_moItems.length){document.getElementById('mo-result').style.display='none';return}
+  if(!_moItems.length){document.getElementById('mo-result').style.display='none';document.getElementById('mo-save-footer').style.display='none';return}
   const total=_moItems.reduce((s,it)=>s+it.price,0);
   document.getElementById('mo-total').textContent=fm(total)+' €';
   document.getElementById('mo-items-list').innerHTML=_moItems.map((it,i)=>`
@@ -3344,6 +3647,9 @@ async function sbSync(){
   if(!sb)return;
   _sbSyncing=true;
   _lastSyncTime=Date.now();
+  // Показываем состояние "синхронизируется" (оранжевый, без пульсации)
+  const _ind=document.getElementById('rt-indicator');
+  if(_ind){_ind.style.background='var(--amber)';_ind.style.animation='none';}
   try{
     if(S.inviteToken){
       // Новый безопасный путь: один RPC вместо 5 прямых запросов
@@ -3377,8 +3683,12 @@ async function sbSync(){
       // Legacy путь: прямые запросы (старые поездки без invite_token)
       await _sbSyncLegacy(sb);
     }
+    // Успешно — зелёный индикатор
+    if(_ind){_ind.style.background='var(--green)';_ind.style.animation='pls 2s infinite';}
   }catch(err){
     console.warn('[SB] Sync error:',err.message||err);
+    // Ошибка — красный индикатор
+    if(_ind){_ind.style.background='var(--red)';_ind.style.animation='none';}
   }finally{
     setTimeout(()=>{_sbSyncing=false;},600);
   }
@@ -3534,7 +3844,7 @@ async function reloadFromRemote(){
       S.isAdmin=isAdm(me);
       if(!S.receipts||!S.receipts.length)S.receipts=myReceipts;
       renderAll();
-      toast('🔄 Синхронизация');
+      // синхронизация без уведомления
     }
   },1000);
 }
@@ -3674,7 +3984,6 @@ function showUpdateBanner(){
 // Онлайн/офлайн индикатор
 window.addEventListener('online',()=>{
   updateRTIndicator(true);
-  toast('🌐 Подключение восстановлено');
   // Регистрируем Background Sync при восстановлении связи
   if('serviceWorker' in navigator&&'SyncManager' in window){
     navigator.serviceWorker.ready.then(reg=>reg.sync.register('sync-expenses')).catch(()=>{});
@@ -3683,7 +3992,7 @@ window.addEventListener('online',()=>{
     setTimeout(()=>{ if(USE_SUPABASE&&S.trip)sbSync(); },1000);
   }
 });
-window.addEventListener('offline',()=>{updateRTIndicator(false);toast('📴 Офлайн — данные сохранены локально')});
+window.addEventListener('offline',()=>{updateRTIndicator(false);});
 
 // Слушаем SW_SYNC_READY — Service Worker сигнализирует что сеть восстановлена
 if('serviceWorker' in navigator){
@@ -3720,14 +4029,9 @@ function init(){
   // Quick-action из URL (?action=add-expense)
   const action=p.get('action');
 
-  // Если в URL есть ?trip=CODE — показываем форму входа и авто-присоединяемся
+  // Если в URL есть ?trip=CODE — плавное авто-присоединение без формы ввода
   if(tc){
-    showOb('ob-s1');
-    document.getElementById('ob-code').value=tc.toUpperCase();
-    // Передаём invite_token в joinTrip() через глобальную переменную
-    if(urlToken)window._pendingInviteToken=urlToken;
-    // Авто-присоединение после инициализации Supabase
-    setTimeout(()=>joinTrip(),600);
+    handleWebJoin(tc, urlToken||null);
     return;
   }
 
@@ -3779,24 +4083,40 @@ function init(){
     }
   }
 
-  // ---- Capacitor: обработка deep links (когда приложение уже запущено) ----
+  // ── Capacitor: deep links (foreground) — срабатывает когда APK уже открыт ──
   // window.Capacitor инжектируется нативным мостом только в APK/AAB;
   // в браузере этот блок просто не выполняется.
   if(window.Capacitor?.isNativePlatform?.() && window.Capacitor.Plugins?.App){
-    window.Capacitor.Plugins.App.addListener('appUrlOpen', data => {
+    window.Capacitor.Plugins.App.addListener('appUrlOpen', data=>{
       try{
         const u=new URL(data.url);
-        const tc=u.searchParams.get('trip');
-        const tok=u.searchParams.get('token');
-        if(tc){
-          if(tok)window._pendingInviteToken=tok;
-          showOb('ob-s1');
-          document.getElementById('ob-code').value=tc.toUpperCase();
-          joinTrip();
+        // Поддерживаем обе схемы:
+        // https://splitaway.netlify.app?trip=XXX&token=YYY
+        // splitaway://trip?id=XXX&token=YYY
+        let tripId=u.searchParams.get('trip')||u.searchParams.get('id')||null;
+        const token=u.searchParams.get('token')||null;
+        if(!tripId)return;
+        tripId=tripId.trim().toUpperCase();
+        if(S.trip&&S.trip.id===tripId){
+          // Уже в этой поездке — просто переходим на главный экран
+          goPage('pg-dash',document.querySelector('.ni'));return;
         }
-      }catch(e){console.warn('[Cap] appUrlOpen parse error:',e)}
+        if(S.trip&&S.trip.id!==tripId){
+          // Предлагаем переключиться
+          if(!confirm('Открыть другую поездку?\n'+tripId))return;
+          // Перезагружаем страницу с новым trip-параметром
+          location.href=location.origin+location.pathname+'?trip='+encodeURIComponent(tripId)+(token?'&token='+encodeURIComponent(token):'');
+          return;
+        }
+        // Нет активной поездки — показываем loading
+        document.getElementById('pg-ob').style.display='flex';
+        handleWebJoin(tripId, token);
+      }catch(e){console.warn('[Cap appUrlOpen]',e);}
     });
   }
+
+  // ── ПВА: не-нативный браузер — показываем подсказку пользователю ──
+  // (Всё остальное уже обрабатывается через ?trip= в URL при старте)
 }
 // Запускаем после загрузки всех defer-скриптов (в т.ч. lucide)
 document.addEventListener('DOMContentLoaded', init);
