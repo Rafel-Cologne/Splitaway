@@ -182,9 +182,11 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
 @keyframes fo{to{opacity:0;transform:translateY(-5px)}}
 
 /* HERO (non-dash pages) */
-.hero{background:var(--header-bg);border:none;border-radius:24px;padding:28px 22px;text-align:center;position:relative;overflow:hidden;box-shadow:var(--card-shadow)}
+.hero{background:var(--header-bg);border:none;border-radius:24px;padding:28px 22px;text-align:center;position:relative;overflow:hidden;box-shadow:var(--card-shadow);color:var(--header-text)}
 .hero::before{content:'';position:absolute;right:-30px;bottom:-40px;width:130px;height:130px;border-radius:50%;background:rgba(255,255,255,.10);pointer-events:none}
 .hero-amt{font-size:3rem;font-weight:800;letter-spacing:-0.05em;font-family:var(--display);color:var(--header-amount)}
+.hero .bdg{background:rgba(255,255,255,0.22)!important;color:var(--header-text)!important}
+.hero *{color:var(--header-text)}
 
 /* DASH BACKGROUND IMAGE */
 #pg-dash{position:relative}
@@ -791,44 +793,45 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
 <div class="ov" id="m-my-order"><div class="mdl" style="max-height:92vh;display:flex;flex-direction:column">
   <div class="mdl-handle"></div>
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-    <div class="mdl-title">✏️ Мой заказ</div>
+    <div class="mdl-title" id="mo-title">✏️ Мой заказ</div>
     <button class="btn btn-g btn-sm btn-ic" onclick="closeModal('m-my-order')"><i data-lucide="x" style="width:15px;height:15px"></i></button>
   </div>
   <div style="overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:13px">
-    <!-- Participant selector -->
-    <div class="iw">
-      <label class="il">Для кого заказ?</label>
-      <div id="mo-participant" style="display:flex;gap:7px;flex-wrap:wrap"></div>
+    <!-- Participant + Payer — always visible at top -->
+    <div style="display:flex;gap:10px">
+      <div class="iw" style="flex:1;min-width:0">
+        <label class="il" id="mo-order-label">Для кого?</label>
+        <div id="mo-participant" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+      </div>
+      <div class="iw" style="flex:1;min-width:0">
+        <label class="il">Кто платит?</label>
+        <div id="mo-payer" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+      </div>
     </div>
     <!-- Order text -->
     <div class="iw">
-      <label class="il" id="mo-order-label">Что заказал?</label>
-      <textarea class="inp" id="mo-txt" placeholder="Пиво 2 по 4€&#10;Салат за 7,50€&#10;Пицца Маргарита 12.90&#10;3 воды - 1.5€" style="min-height:130px;font-size:0.88rem"></textarea>
+      <label class="il">Что заказал(а)?</label>
+      <textarea class="inp" id="mo-txt" placeholder="Пиво 2 по 4€&#10;Салат за 7,50€&#10;Пицца Маргарита 12.90&#10;3 воды - 1.5€" style="min-height:110px;font-size:0.88rem"></textarea>
+    </div>
+    <!-- Expense name -->
+    <div class="iw">
+      <label class="il">Название расхода</label>
+      <input class="inp" id="mo-exp-name" placeholder="Ресторан / Магазин...">
     </div>
     <!-- Parse button -->
-    <button class="btn btn-p btn-fw" onclick="parseMyOrder()"><i data-lucide="plus-circle" style="width:14px;height:14px"></i> Добавить мой заказ</button>
+    <button class="btn btn-p btn-fw" id="mo-add-btn" onclick="parseMyOrder()"><i data-lucide="plus-circle" style="width:14px;height:14px"></i> Добавить заказ</button>
     <!-- Loading -->
     <div id="mo-loading" class="ld" style="display:none"><div class="spin"></div><span>AI разбирает...</span></div>
-    <!-- Parsed result -->
-    <div id="mo-result" style="display:none;flex-direction:column;gap:10px">
+    <!-- Parsed result — shown briefly for verification -->
+    <div id="mo-result" style="display:none;flex-direction:column;gap:8px">
       <div style="display:flex;flex-direction:column;gap:4px" id="mo-items-list"></div>
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:11px 14px;background:var(--s2);border-radius:var(--rsm)">
-        <span style="font-weight:600">Итого:</span>
-        <span style="font-family:var(--mono);font-weight:700;font-size:1.1rem;color:var(--green)" id="mo-total">0,00 €</span>
-      </div>
-      <!-- Expense name -->
-      <div class="iw">
-        <label class="il">Название расхода</label>
-        <input class="inp" id="mo-exp-name" placeholder="Ресторан / Магазин...">
-      </div>
-      <!-- Payer -->
-      <div class="iw">
-        <label class="il" id="mo-payer-label">Кто оплатил?</label>
-        <div id="mo-payer" style="display:flex;gap:7px;flex-wrap:wrap"></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 13px;background:var(--field);border-radius:var(--rsm)">
+        <span style="font-weight:700">Итого:</span>
+        <span style="font-family:var(--mono);font-weight:800;font-size:1.05rem;color:var(--accent)" id="mo-total">0,00 €</span>
       </div>
     </div>
   </div>
-  <!-- Sticky save button — always visible at bottom when items are added -->
+  <!-- Save footer -->
   <div id="mo-save-footer" style="display:none;padding-top:10px;border-top:1px solid var(--b1);margin-top:4px;flex-shrink:0">
     <button class="btn btn-p btn-fw" onclick="saveMyOrder()"><i data-lucide="check" style="width:14px;height:14px"></i> Сохранить расход</button>
   </div>
@@ -1509,7 +1512,7 @@ function showExpDetail(id){
       <button class="btn btn-g btn-sm btn-ic" onclick="closeModal('m-exp-detail')"><i data-lucide="x" style="width:15px;height:15px"></i></button>
     </div>
     <div class="hero" style="padding:18px;text-align:left;margin-bottom:14px">
-      <div style="font-size:1.9rem;font-weight:700;font-family:var(--mono)">${fm(e.amount)} <span style="font-size:0.9rem;color:var(--t2)">EUR</span></div>
+      <div style="font-size:1.9rem;font-weight:700;font-family:var(--mono)">${fm(e.amount)} <span style="font-size:0.9rem;color:rgba(255,255,255,0.72)">EUR</span></div>
       <div style="margin-top:7px;display:flex;gap:7px;flex-wrap:wrap">
         ${e.fromTreasury?'<span class="bdg bdg-am">Из кассы</span>':''}
         ${!e.fromTreasury?`<span class="bdg bdg-p">${e.participants.length} участников</span>`:''}
@@ -1546,6 +1549,7 @@ function showExpDetail(id){
         </div>`).join('')}
       </div>
     </div>`:''}
+    ${e.items&&e.items.length?`<button class="btn btn-s btn-fw" onclick="closeModal('m-exp-detail');openMyOrder('${e.id}')"><i data-lucide="pencil" style="width:13px;height:13px"></i> Редактировать заказ</button>`:''}
     ${canEdit?`<button class="btn btn-d btn-fw" onclick="delExp('${e.id}')"><i data-lucide="trash-2" style="width:13px;height:13px"></i> Удалить расход</button>`:''}
   `;
   openModal('m-exp-detail');initializeIcons()
@@ -2297,36 +2301,94 @@ function clearHolder(){
 // =======================================================
 // MY ORDER (Мой заказ)
 // =======================================================
-let _moItems=[];// parsed items for current order
+let _moItems=[];
+let _moEditId=null; // id of expense being edited (null = new)
 
-function openMyOrder(){
+function _moPersonChip(m,selectedName){
+  const canSelect=S.isAdmin||m.name===S.me||m.name==='_all';
+  const isOn=selectedName?m.name===selectedName:m.name===S.me;
+  return `<div class="wp ${isOn?'on':''}" data-mo-person="${escHtml(m.name)}"
+    ${canSelect?'onclick="selMoPerson(this)"':''}
+    style="${!canSelect?'opacity:0.38;cursor:default;pointer-events:none':''}">
+    ${m.name==='_all'
+      ?'<span style="font-size:1rem">👥</span>'
+      :`<div class="av av-sm" style="background:${ac(m.name)}">${escHtml(m.name[0]||'?')}</div>`}
+    <span style="color:${m.name==='_all'?'var(--accent)':ac(m.name)};font-weight:600">${m.name==='_all'?'Для всех':escHtml(m.name)}</span>
+  </div>`;
+}
+
+function _moPayerChip(m,selectedName){
+  const canSelect=S.isAdmin||m.name===S.me||m.name==='_treasury';
+  const isOn=selectedName?m.name===selectedName:m.name===S.me;
+  if(m.name==='_treasury'){
+    const remaining=S.treasury.total-S.treasury.spent;
+    if(remaining<=0)return '';
+    return `<div class="wp ${isOn?'on':''}" data-mo-payer="_treasury" onclick="selMoPayer(this)" style="border-color:rgba(34,197,94,0.35)">
+      <span>💰</span><span style="color:var(--green);font-weight:600;font-size:0.8rem">Касса</span>
+    </div>`;
+  }
+  return `<div class="wp ${isOn?'on':''}" data-mo-payer="${escHtml(m.name)}"
+    ${canSelect?'onclick="selMoPayer(this)"':''}
+    style="${!canSelect?'opacity:0.38;cursor:default;pointer-events:none':''}">
+    <div class="av av-sm" style="background:${ac(m.name)}">${escHtml(m.name[0]||'?')}</div>
+    <span style="color:${ac(m.name)};font-weight:600">${escHtml(m.name)}</span>
+  </div>`;
+}
+
+function openMyOrder(editExpId){
   _moItems=[];
-  document.getElementById('mo-txt').value='';
+  _moEditId=editExpId||null;
+  const isEdit=!!_moEditId;
+  const exp=isEdit?S.expenses.find(e=>e.id===_moEditId):null;
+
+  document.getElementById('mo-title').textContent=isEdit?'✏️ Редактировать заказ':'✏️ Мой заказ';
+  document.getElementById('mo-add-btn').textContent=isEdit?'Пересчитать':'Добавить заказ';
+  document.getElementById('mo-txt').value=isEdit&&exp?exp.name:'';
+  document.getElementById('mo-exp-name').value=isEdit&&exp?exp.name:'';
   document.getElementById('mo-result').style.display='none';
   document.getElementById('mo-loading').style.display='none';
   document.getElementById('mo-save-footer').style.display='none';
-  // Participant selector
-  const pEl=document.getElementById('mo-participant');
-  pEl.innerHTML=S.members.map(m=>{
-    const canSelect=S.isAdmin||m.name===S.me;
-    return `<div class="wp ${m.name===S.me?'on':''}" data-mo-person="${escHtml(m.name)}"
-      ${canSelect?'onclick="selMoPerson(this,this.dataset.moPerson)"':''}
-      style="${!canSelect?'opacity:0.38;cursor:default;pointer-events:none':''}">
-      <div class="av av-sm" style="background:${ac(m.name)}">${escHtml(m.name[0]||'?')}</div>
-      <span style="color:${ac(m.name)};font-weight:600">${escHtml(m.name)}</span>
-    </div>`;
-  }).join('');
+
+  const selectedPerson=isEdit&&exp?(exp.participants.length===S.members.length?'_all':exp.participants[0]):S.me;
+  const selectedPayer=isEdit&&exp?exp.paidBy:S.me;
+
+  // Participant selector — "Для всех" first
+  const allChip={name:'_all'};
+  document.getElementById('mo-participant').innerHTML=
+    _moPersonChip(allChip,selectedPerson)+
+    S.members.map(m=>_moPersonChip(m,selectedPerson)).join('');
+
+  // Payer selector
+  const treasuryMock={name:'_treasury'};
+  document.getElementById('mo-payer').innerHTML=
+    S.members.map(m=>_moPayerChip(m,selectedPayer)).join('')+
+    _moPayerChip(treasuryMock,selectedPayer);
+
+  // Pre-fill items if editing
+  if(isEdit&&exp&&exp.items&&exp.items.length){
+    _moItems=exp.items.map(it=>({name:it.name,price:it.price,qty:it.qty||1}));
+    renderMoItems();
+    document.getElementById('mo-result').style.display='flex';
+    document.getElementById('mo-save-footer').style.display='block';
+    document.getElementById('mo-txt').value='';
+  }
+
   openModal('m-my-order');initializeIcons();
 }
 
 function selMoPerson(el){
   document.querySelectorAll('[data-mo-person]').forEach(b=>b.classList.remove('on'));
   el.classList.add('on');
-  // Update labels based on selected person's gender
   const name=el.dataset.moPerson;
-  const g=mg(name);
-  document.getElementById('mo-order-label').textContent=g==='f'?'Что заказала?':'Что заказал?';
-  document.getElementById('mo-payer-label').textContent=g==='f'?'Кто оплатила?':'Кто оплатил?';
+  if(name!=='_all'){
+    const g=mg(name);
+    document.getElementById('mo-order-label').textContent=g==='f'?'Для кого? (она)':'Для кого?';
+  } else {
+    document.getElementById('mo-order-label').textContent='Для кого?';
+  }
+  if(!document.getElementById('mo-exp-name').value){
+    document.getElementById('mo-exp-name').value=name==='_all'?'Общий заказ':'Заказ — '+name;
+  }
 }
 
 function selMoPayer(el){
@@ -2334,23 +2396,46 @@ function selMoPayer(el){
   el.classList.add('on');
 }
 
+function renderMoItems(){
+  document.getElementById('mo-items-list').innerHTML=_moItems.map((it,i)=>`
+    <div style="display:flex;align-items:center;gap:8px;padding:9px 12px;background:var(--card);border:var(--card-border);border-radius:var(--rsm);box-shadow:var(--card-shadow)">
+      <div style="flex:1;font-size:0.86rem;font-weight:600">${escHtml(it.name)}${it.qty>1?` <span style="color:var(--t3);font-size:0.75rem">×${it.qty}</span>`:''}</div>
+      <input type="number" step="0.01" value="${it.price.toFixed(2)}" onchange="_moUpdatePrice(${i},this.value)"
+        style="width:68px;border:1.5px solid var(--b1);border-radius:8px;padding:4px 7px;background:var(--field);color:var(--text);font-family:var(--mono);font-size:0.86rem;font-weight:700;text-align:right;outline:none">
+      <span style="font-size:0.8rem;color:var(--t2)">€</span>
+      <button onclick="removeMoItem(${i})" style="border:none;background:none;color:var(--t3);cursor:pointer;padding:2px;flex-shrink:0"><i data-lucide="x" style="width:13px;height:13px"></i></button>
+    </div>`).join('');
+  const total=_moItems.reduce((s,it)=>s+it.price,0);
+  document.getElementById('mo-total').textContent=fm(total)+' €';
+  initializeIcons();
+}
+
+function _moUpdatePrice(idx,val){
+  _moItems[idx].price=parseFloat(val)||0;
+  const total=_moItems.reduce((s,it)=>s+it.price,0);
+  document.getElementById('mo-total').textContent=fm(total)+' €';
+}
+
 async function parseMyOrder(){
   const t=document.getElementById('mo-txt').value.trim();
-  if(!t){toast('⚠️ Введите текст заказа');return}
+  if(!t&&!_moItems.length){toast('⚠️ Введите текст заказа');return}
+  // If text is empty but items exist — just save
+  if(!t&&_moItems.length){saveMyOrder();return}
+
   const personEl=document.querySelector('[data-mo-person].on');
   const person=personEl?personEl.dataset.moPerson:S.me;
 
   document.getElementById('mo-loading').style.display='flex';
   document.getElementById('mo-result').style.display='none';
+  document.getElementById('mo-save-footer').style.display='none';
 
   let items=[];
-  {
-    try{
-      const r=await fetch(`${API_BASE}/api/anthropic`,{
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({model:'claude-3-5-haiku-20241022',max_tokens:800,messages:[{role:'user',content:
-          `Parse this order text. Return ONLY valid JSON: {"items":[{"name":"item name","price":0.00,"qty":1},...]}
+  try{
+    const r=await fetch(`${API_BASE}/api/anthropic`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({model:'claude-3-5-haiku-20241022',max_tokens:800,messages:[{role:'user',content:
+        `Parse this order text. Return ONLY valid JSON: {"items":[{"name":"item name","price":0.00,"qty":1},...]}
 Rules:
 - price = TOTAL for that line (qty*unitPrice)
 - "2 пива по 4€" → {name:"Пиво",qty:2,price:8.00}
@@ -2359,89 +2444,66 @@ Rules:
 - comma as decimal: "7,50" = 7.50
 - Capitalize names
 Text:\n${t}`}]})
-      });
-      const d=await r.json();
-      if(d.error)throw new Error(d.error.message);
-      const txt=(d.content?.[0]?.text||'').replace(/```json|```/g,'').trim();
-      items=(JSON.parse(txt).items||[]).map(it=>({name:it.name,price:parseFloat(it.price)||0,qty:parseInt(it.qty)||1}));
-    }catch(e){console.warn('[AI order parse]',e)}
-  }
-  if(!items.length){
-    items=parseReceiptText(t);
-  }
+    });
+    const d=await r.json();
+    if(d.error)throw new Error(d.error.message);
+    const txt=(d.content?.[0]?.text||'').replace(/```json|```/g,'').trim();
+    items=(JSON.parse(txt).items||[]).map(it=>({name:it.name,price:parseFloat(it.price)||0,qty:parseInt(it.qty)||1}));
+  }catch(e){console.warn('[AI order parse]',e)}
+
+  if(!items.length) items=parseReceiptText(t);
   document.getElementById('mo-loading').style.display='none';
   if(!items.length){toast('⚠️ Не удалось распознать. Проверьте формат.');return}
 
   _moItems=items;
-  const total=items.reduce((s,it)=>s+it.price,0);
+  if(!document.getElementById('mo-exp-name').value)
+    document.getElementById('mo-exp-name').value=person==='_all'?'Общий заказ':'Заказ — '+person;
 
-  // Render items
-  document.getElementById('mo-items-list').innerHTML=items.map((it,i)=>`
-    <div style="display:flex;align-items:center;gap:9px;padding:8px 11px;background:var(--s1);border:1px solid var(--b1);border-radius:var(--rsm)">
-      <div style="flex:1;font-size:0.86rem">${escHtml(it.name)}${it.qty>1?` <span style="color:var(--t3);font-size:0.75rem">×${it.qty}</span>`:''}</div>
-      <div style="font-family:var(--mono);font-weight:600;font-size:0.88rem">${fm(it.price)} €</div>
-      <button onclick="removeMoItem(${i})" style="border:none;background:none;color:var(--t3);cursor:pointer;padding:2px"><i data-lucide="x" style="width:12px;height:12px"></i></button>
-    </div>`).join('');
-  document.getElementById('mo-total').textContent=fm(total)+' €';
-  document.getElementById('mo-exp-name').value='Заказ — '+person;
-
-  // Payer selector
-  const remaining=S.treasury.total-S.treasury.spent;
-  const treasury=remaining>0?`<div class="wp" data-mo-payer="_treasury" onclick="selMoPayer(this,'_treasury')" style="border-color:rgba(34,197,94,0.35)">
-    <span>💰</span><span style="color:var(--green);font-weight:600;font-size:0.8rem">Касса (${fm(remaining)} €)</span>
-  </div>`:'';
-  document.getElementById('mo-payer').innerHTML=S.members.map(m=>{
-    const canSelect=S.isAdmin||m.name===S.me;
-    return `<div class="wp ${m.name===S.me?'on':''}" data-mo-payer="${escHtml(m.name)}"
-      ${canSelect?'onclick="selMoPayer(this)"':''}
-      style="${!canSelect?'opacity:0.38;cursor:default;pointer-events:none':''}">
-      <div class="av av-sm" style="background:${ac(m.name)}">${escHtml(m.name[0]||'?')}</div>
-      <span style="color:${ac(m.name)};font-weight:600">${escHtml(m.name)}</span>
-    </div>`;
-  }).join('')+treasury;
-
+  renderMoItems();
   document.getElementById('mo-result').style.display='flex';
   document.getElementById('mo-save-footer').style.display='block';
-  // Scroll to show save button
-  setTimeout(()=>{const sc=document.querySelector('#m-my-order .mdl > div[style*="overflow-y"]');if(sc)sc.scrollTop=sc.scrollHeight;},50);
-  initializeIcons();
+  document.getElementById('mo-txt').value='';
+
+  // Auto-save and close
+  saveMyOrder();
 }
 
 function removeMoItem(idx){
   _moItems.splice(idx,1);
   if(!_moItems.length){document.getElementById('mo-result').style.display='none';document.getElementById('mo-save-footer').style.display='none';return}
-  const total=_moItems.reduce((s,it)=>s+it.price,0);
-  document.getElementById('mo-total').textContent=fm(total)+' €';
-  document.getElementById('mo-items-list').innerHTML=_moItems.map((it,i)=>`
-    <div style="display:flex;align-items:center;gap:9px;padding:8px 11px;background:var(--s1);border:1px solid var(--b1);border-radius:var(--rsm)">
-      <div style="flex:1;font-size:0.86rem">${escHtml(it.name)}${it.qty>1?` <span style="color:var(--t3);font-size:0.75rem">×${it.qty}</span>`:''}</div>
-      <div style="font-family:var(--mono);font-weight:600;font-size:0.88rem">${fm(it.price)} €</div>
-      <button onclick="removeMoItem(${i})" style="border:none;background:none;color:var(--t3);cursor:pointer;padding:2px"><i data-lucide="x" style="width:12px;height:12px"></i></button>
-    </div>`).join('');
-  initializeIcons();
+  renderMoItems();
 }
 
 function saveMyOrder(){
   if(!_moItems.length){toast('⚠️ Нет позиций');return}
   const personEl=document.querySelector('[data-mo-person].on');
-  const person=personEl?personEl.dataset.moPerson:S.me;
+  const personVal=personEl?personEl.dataset.moPerson:S.me;
+  const isAll=personVal==='_all';
+  const participants=isAll?S.members.map(m=>m.name):[personVal];
   const payerEl=document.querySelector('[data-mo-payer].on');
   const payer=payerEl?payerEl.dataset.moPayer:S.me;
-  const name=document.getElementById('mo-exp-name').value.trim()||('Заказ — '+person);
+  const name=document.getElementById('mo-exp-name').value.trim()||(isAll?'Общий заказ':'Заказ — '+personVal);
   const total=_moItems.reduce((s,it)=>s+it.price,0);
   if(total<=0){toast('⚠️ Сумма 0');return}
   const fromTreasury=payer==='_treasury';
   const exp={
-    id:uid(),name,amount:total,comment:'',date:today(),
+    id:_moEditId||uid(),name,amount:total,comment:'',date:today(),
     paidBy:fromTreasury?'_treasury':payer,
-    participants:[person],
+    participants,
     fromTreasury,
-    items:_moItems.map(it=>({name:it.name,price:it.price,qty:it.qty||1,assignedTo:person}))
+    items:_moItems.map(it=>({name:it.name,price:it.price,qty:it.qty||1,assignedTo:isAll?'_all':personVal}))
   };
   if(fromTreasury)S.treasury.spent+=total;
-  S.expenses.push(exp);
+  if(_moEditId){
+    const idx=S.expenses.findIndex(e=>e.id===_moEditId);
+    if(idx>=0)S.expenses[idx]=exp; else S.expenses.push(exp);
+    toast('✅ Заказ обновлён: '+fm(total)+' €');
+  } else {
+    S.expenses.push(exp);
+    toast('✅ Заказ сохранён: '+fm(total)+' €');
+  }
+  _moEditId=null;
   save();closeModal('m-my-order');renderAll();
-  toast('✅ Заказ '+person+' сохранён: '+fm(total)+' €');
 }
 
 function openEditCashList(){
