@@ -704,6 +704,16 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
           <button class="theme-chip tp-fresh"    onclick="setTheme('fresh')"    title="Fresh"></button>
         </div>
       </div>
+      <!-- Couple mode -->
+      <div class="sec" id="sec-couple-mode" style="display:none">
+        <div class="sec-hd"><span class="sec-ttl">Расчёт баланса</span></div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0">
+          <div style="font-size:0.88rem;color:var(--t2)">Считать пары как одно целое</div>
+          <button id="couple-mode-btn" onclick="toggleCoupleMode()" style="width:46px;height:26px;border-radius:13px;border:none;cursor:pointer;position:relative;transition:background 0.2s;flex-shrink:0">
+            <span style="position:absolute;top:3px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,0.3);transition:left 0.2s" id="couple-mode-knob"></span>
+          </button>
+        </div>
+      </div>
       <!-- Danger zone -->
       <div class="sec">
         <div class="sec-hd"><span class="sec-ttl">Поездка</span></div>
@@ -1245,10 +1255,21 @@ function renderDash(){
   document.getElementById('d-cnt').textContent=S.expenses.length;
   document.getElementById('d-mbr').textContent=S.members.length;
 
-  // My balance
-  const bal=calcBal();const debts=simplify(bal);
-  const myOwe=debts.filter(d=>d.from===S.me);
-  const myOwed=debts.filter(d=>d.to===S.me);
+  // My balance — grouped by couple (or individual if user chose so)
+  const bal=calcBal();
+  const rawDebts=simplify(bal);
+  const coupleMode=isCoupleMode()&&!!groupOf(S.me);
+  const myGrp=groupOf(S.me);
+  const myKey=myGrp?'grp§'+myGrp.members.slice().sort().join('§'):S.me;
+  let myOwe,myOwed;
+  if(coupleMode){
+    const groupedDebts=buildGroupedDebts(rawDebts);
+    myOwe=groupedDebts.filter(d=>d.fromInfo.key===myKey);
+    myOwed=groupedDebts.filter(d=>d.toInfo.key===myKey);
+  } else {
+    myOwe=rawDebts.filter(d=>d.from===S.me).map(d=>({fromInfo:{key:d.from,isGroup:false,members:[d.from]},toInfo:{key:d.to,isGroup:false,members:[d.to]},amount:d.amount}));
+    myOwed=rawDebts.filter(d=>d.to===S.me).map(d=>({fromInfo:{key:d.from,isGroup:false,members:[d.from]},toInfo:{key:d.to,isGroup:false,members:[d.to]},amount:d.amount}));
+  }
   const myEl=document.getElementById('d-mybal');
   const sumEl=document.getElementById('d-mybal-summary');
   const totalOwe=myOwe.reduce((s,d)=>s+d.amount,0);
@@ -1259,24 +1280,31 @@ function renderDash(){
     else if(netBal>=0){sumEl.textContent='+'+fm(netBal)+' €';sumEl.style.color='var(--green)';}
     else{sumEl.textContent=fm(netBal)+' €';sumEl.style.color='var(--red)';}
   }
+  // helper: render avatar for a debt side
+  const dbAvatar=(info)=>info.isGroup
+    ?`<div style="position:relative;width:30px;height:22px;flex-shrink:0">${info.members.slice(0,2).map((m,i)=>`<div class="av av-sm" style="background:${ac(m)};position:absolute;${i===0?'left:0':'left:10px'};top:0;width:20px;height:20px;font-size:0.6rem;box-shadow:0 0 0 2px var(--bg)">${escHtml(m[0]||'?')}</div>`).join('')}</div>`
+    :`<div class="av av-sm" style="background:${ac(info.members[0])}">${escHtml((info.members[0]||'?')[0])}</div>`;
+  const dbLabel=(info)=>info.isGroup
+    ?`<span style="font-weight:700">${escHtml(info.members[0])}</span><span style="color:var(--t2);font-size:0.78rem"> + ${escHtml(info.members.slice(1).join(', '))}</span>`
+    :`<span style="color:${ac(info.members[0])};font-weight:600">${escHtml(info.members[0])}</span>`;
   if(!myOwe.length&&!myOwed.length){
     myEl.innerHTML='<div class="emp" style="padding:14px"><div class="emp-t">Вы в балансе 🎉</div></div>'
   } else {
     myEl.innerHTML=[
       ...myOwe.map(d=>`<div class="dr">
-        <div class="av av-sm" style="background:${ac(d.to)}">${escHtml(d.to[0]||'?')}</div>
+        ${dbAvatar(d.toInfo)}
         <div style="flex:1;font-size:0.86rem">
           <span style="color:${ac(S.me)};font-weight:600">${escHtml(S.me)}</span>
           <span style="color:var(--t2)"> ${owes(S.me)} </span>
-          <span style="color:${ac(d.to)};font-weight:600">${escHtml(d.to)}</span>
+          ${dbLabel(d.toInfo)}
         </div>
         <div class="da neg">-${fm(d.amount)} €</div>
       </div>`),
       ...myOwed.map(d=>`<div class="dr">
-        <div class="av av-sm" style="background:${ac(d.from)}">${escHtml(d.from[0]||'?')}</div>
+        ${dbAvatar(d.fromInfo)}
         <div style="flex:1;font-size:0.86rem">
-          <span style="color:${ac(d.from)};font-weight:600">${escHtml(d.from)}</span>
-          <span style="color:var(--t2)"> ${owes(d.from)} вам</span>
+          ${dbLabel(d.fromInfo)}
+          <span style="color:var(--t2)"> ${d.fromInfo.isGroup?'должны':''+owes(d.fromInfo.members[0])} вам</span>
         </div>
         <div class="da pos">+${fm(d.amount)} €</div>
       </div>`)
@@ -2529,6 +2557,11 @@ function renderSettings(){
   if(tBtn)tBtn.innerHTML=isLight
     ?'<i data-lucide="moon" style="width:16px;height:16px"></i> Тёмная тема'
     :'<i data-lucide="sun" style="width:16px;height:16px"></i> Светлая тема';
+  // Show couple-mode toggle only if user is in a couple
+  const myGrpS=groupOf(S.me);
+  const secCM=document.getElementById('sec-couple-mode');
+  if(secCM)secCM.style.display=(myGrpS&&myGrpS.type==='couple')?'':'none';
+  updateCoupleModeBtn();
   renderSettingMembers();
   renderSettingGroups();
   renderArchive();
@@ -3656,6 +3689,19 @@ function setTheme(t){
 function toggleTheme(){
   const cur=document.documentElement.getAttribute('data-theme')||'dark';
   setTheme(cur==='dark'?'light':'dark');
+}
+function isCoupleMode(){return localStorage.getItem('sw_couple_mode')!=='0'}
+function updateCoupleModeBtn(){
+  const on=isCoupleMode();
+  const btn=document.getElementById('couple-mode-btn');
+  const knob=document.getElementById('couple-mode-knob');
+  if(btn)btn.style.background=on?'var(--accent)':'var(--b1)';
+  if(knob)knob.style.left=on?'23px':'3px';
+}
+function toggleCoupleMode(){
+  localStorage.setItem('sw_couple_mode',isCoupleMode()?'0':'1');
+  updateCoupleModeBtn();
+  renderHome();
 }
 
 // =======================================================
