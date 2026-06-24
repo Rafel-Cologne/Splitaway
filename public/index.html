@@ -4059,7 +4059,6 @@ function showLocalNotification(title,body){
   }
 }
 
-// Уведомление при добавлении расхода другим участником
 function notifyNewExpense(expName,paidBy,amount){
   if(paidBy===S.me)return; // не уведомляем себя
   showLocalNotification(
@@ -4127,7 +4126,7 @@ if('serviceWorker' in navigator){
 function init(){
   initializeIcons();
 
-  // Восстанавливаем тему (azure / midnight / fresh), по умолчанию azure
+  // Восстанавливаем тему (если явно выбрана, иначе — системная через CSS media query)
   const savedTheme=localStorage.getItem('sw_theme')||'azure';
   document.documentElement.setAttribute('data-theme',savedTheme);
   _updateMetaThemeColor(savedTheme);
