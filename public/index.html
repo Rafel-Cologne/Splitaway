@@ -113,6 +113,9 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 .btn-sm{padding:7px 13px;font-size:0.78rem;border-radius:var(--rxs)}
 .btn-ic{padding:9px;border-radius:var(--rxs)}
 .btn-fw{width:100%}
+.gender-toggle{display:flex;gap:3px;background:var(--s1);border:1px solid var(--b1);border-radius:var(--rxs);padding:3px;flex-shrink:0}
+.gtb{flex:1;padding:8px 10px;border:none;border-radius:calc(var(--rxs) - 2px);font-family:var(--font);font-weight:700;font-size:0.88rem;cursor:pointer;background:none;color:var(--t2);transition:all 0.15s;min-width:32px}
+.gtb.active{background:var(--accent);color:#fff;box-shadow:0 2px 6px var(--aglow)}
 .btn-green{background:var(--green);color:#0a0a0f}
 
 /* INPUTS */
@@ -338,7 +341,8 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
         <label class="il">Ваше имя (вы — Админ)</label>
         <div style="display:flex;gap:8px">
           <input class="inp" id="ct-admin" style="flex:1">
-          <select class="inp" id="ct-admin-g" style="width:72px;flex-shrink:0"><option value="m">М</option><option value="f">Ж</option></select>
+          <input type="hidden" id="ct-admin-g" value="m">
+          <div class="gender-toggle"><button type="button" class="gtb active" onclick="pickGender('ct-admin-g',this,'m')">М</button><button type="button" class="gtb" onclick="pickGender('ct-admin-g',this,'f')">Ж</button></div>
         </div>
       </div>
       <div class="iw">
@@ -346,7 +350,8 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
         <div id="ct-members" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px;min-height:28px"></div>
         <div style="display:flex;gap:7px">
           <input class="inp" id="ct-m-name" placeholder="Имя" onkeydown="if(event.key==='Enter'){event.preventDefault();ctAddMember()}" style="flex:1">
-          <select class="inp" id="ct-m-g" style="width:72px;flex-shrink:0"><option value="m">М</option><option value="f">Ж</option></select>
+          <input type="hidden" id="ct-m-g" value="m">
+          <div class="gender-toggle"><button type="button" class="gtb active" onclick="pickGender('ct-m-g',this,'m')">М</button><button type="button" class="gtb" onclick="pickGender('ct-m-g',this,'f')">Ж</button></div>
           <button class="btn btn-s btn-sm" onclick="ctAddMember()">+</button>
         </div>
       </div>
@@ -855,7 +860,10 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
   <div class="mdl-handle"></div>
   <div class="mdl-title">Добавить участника</div>
   <div class="iw"><label class="il">Имя</label><input class="inp" id="am-name"></div>
-  <div class="iw"><label class="il">Пол</label><select class="inp" id="am-gender"><option value="m">М — Мужской</option><option value="f">Ж — Женский</option></select></div>
+  <div class="iw"><label class="il">Пол</label>
+    <input type="hidden" id="am-gender" value="m">
+    <div class="gender-toggle" style="width:100%"><button type="button" class="gtb active" onclick="pickGender('am-gender',this,'m')">М — Мужской</button><button type="button" class="gtb" onclick="pickGender('am-gender',this,'f')">Ж — Женский</button></div>
+  </div>
   <button class="btn btn-p btn-fw" onclick="saveMember()"><i data-lucide="check" style="width:15px;height:15px"></i> Добавить</button>
 </div></div>
 
@@ -4119,6 +4127,12 @@ function init(){
   // ── ПВА: не-нативный браузер — показываем подсказку пользователю ──
   // (Всё остальное уже обрабатывается через ?trip= в URL при старте)
 }
+function pickGender(hiddenId,btn,val){
+  document.getElementById(hiddenId).value=val;
+  btn.closest('.gender-toggle').querySelectorAll('.gtb').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
 // Запускаем после загрузки всех defer-скриптов (в т.ч. lucide)
 document.addEventListener('DOMContentLoaded', init);
 </script>
