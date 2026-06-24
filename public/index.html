@@ -2520,7 +2520,7 @@ function renderSettings(){
   const delBtn=document.getElementById('set-delete-btn');
   if(delBtn)delBtn.style.display=isAdminUser?'':'none';
   const leaveBtn=document.getElementById('set-leave-btn');
-  if(leaveBtn)leaveBtn.style.display=isAdminUser?'none':'';
+  if(leaveBtn)leaveBtn.style.display='';
   document.getElementById('set-name').value=S.trip?.name||'';
   document.getElementById('set-dest').value=S.trip?.dest||'';
   // Theme button state
