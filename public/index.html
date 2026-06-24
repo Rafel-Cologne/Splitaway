@@ -128,9 +128,14 @@ body{font-family:var(--font);background:var(--bg);background-image:var(--bg-img)
 /* INPUTS */
 .iw{display:flex;flex-direction:column;gap:6px}
 .il{font-size:11px;color:var(--t2);font-weight:700;letter-spacing:0.07em;text-transform:uppercase}
-.inp{background:var(--field);border:1px solid transparent;border-radius:13px;padding:13px 15px;color:var(--text);font-family:var(--font);font-size:0.93rem;font-weight:600;outline:none;transition:border-color 0.18s,box-shadow 0.18s;width:100%}
+.inp{background:var(--field);border:1.5px solid var(--b1);border-radius:13px;padding:13px 15px;color:var(--text);font-family:var(--font);font-size:0.93rem;font-weight:600;outline:none;transition:border-color 0.18s,box-shadow 0.18s;width:100%}
 .inp:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--aglow)}
 .inp::placeholder{color:var(--t3);font-weight:400}
+
+/* GENDER TOGGLE */
+.gender-toggle{display:flex;gap:3px;background:var(--field);border:1.5px solid var(--b1);border-radius:13px;padding:3px}
+.gtb{flex:1;padding:9px 0;border:none;border-radius:10px;font-family:var(--font);font-weight:800;font-size:0.9rem;cursor:pointer;background:none;color:var(--t2);transition:all 0.15s}
+.gtb.active{background:var(--accent);color:var(--on-accent);box-shadow:0 2px 8px var(--aglow)}
 textarea.inp{resize:vertical;min-height:90px}
 select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='11' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 13px center;padding-right:36px}
 
@@ -324,7 +329,7 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
 <!-- ===== ONBOARDING ===== -->
 <div id="pg-ob" class="ob fade-in">
   <div style="display:flex;flex-direction:column;align-items:center;gap:14px">
-    <div class="logo">✈️</div>
+    <div class="logo" style="background:none;box-shadow:none;padding:0;overflow:hidden"><img src="/icons/icon.svg" style="width:80px;height:80px;border-radius:26px;display:block"></div>
     <div><div class="logo-txt">Split<span>away</span></div><div style="color:var(--t2);font-size:0.88rem;margin-top:3px">Умное деление расходов</div></div>
   </div>
   <div style="display:flex;flex-direction:column;gap:18px;width:100%;max-width:420px">
@@ -348,7 +353,11 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
         <label class="il">Ваше имя (вы — Админ)</label>
         <div style="display:flex;gap:8px">
           <input class="inp" id="ct-admin" style="flex:1">
-          <select class="inp" id="ct-admin-g" style="width:72px;flex-shrink:0"><option value="m">М</option><option value="f">Ж</option></select>
+          <input type="hidden" id="ct-admin-g" value="m">
+          <div class="gender-toggle" style="width:88px;flex-shrink:0">
+            <button type="button" class="gtb active" onclick="pickGender('ct-admin-g',this,'m')">М</button>
+            <button type="button" class="gtb" onclick="pickGender('ct-admin-g',this,'f')">Ж</button>
+          </div>
         </div>
       </div>
       <div class="iw">
@@ -356,7 +365,11 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
         <div id="ct-members" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px;min-height:28px"></div>
         <div style="display:flex;gap:7px">
           <input class="inp" id="ct-m-name" placeholder="Имя" onkeydown="if(event.key==='Enter'){event.preventDefault();ctAddMember()}" style="flex:1">
-          <select class="inp" id="ct-m-g" style="width:72px;flex-shrink:0"><option value="m">М</option><option value="f">Ж</option></select>
+          <input type="hidden" id="ct-m-g" value="m">
+          <div class="gender-toggle" style="width:88px;flex-shrink:0">
+            <button type="button" class="gtb active" onclick="pickGender('ct-m-g',this,'m')">М</button>
+            <button type="button" class="gtb" onclick="pickGender('ct-m-g',this,'f')">Ж</button>
+          </div>
           <button class="btn btn-s btn-sm" onclick="ctAddMember()">+</button>
         </div>
       </div>
@@ -875,7 +888,14 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
   <div class="mdl-handle"></div>
   <div class="mdl-title">Добавить участника</div>
   <div class="iw"><label class="il">Имя</label><input class="inp" id="am-name"></div>
-  <div class="iw"><label class="il">Пол</label><select class="inp" id="am-gender"><option value="m">М — Мужской</option><option value="f">Ж — Женский</option></select></div>
+  <div class="iw">
+    <label class="il">Пол</label>
+    <input type="hidden" id="am-gender" value="m">
+    <div class="gender-toggle">
+      <button type="button" class="gtb active" onclick="pickGender('am-gender',this,'m')">М — Мужской</button>
+      <button type="button" class="gtb" onclick="pickGender('am-gender',this,'f')">Ж — Женский</button>
+    </div>
+  </div>
   <button class="btn btn-p btn-fw" onclick="saveMember()"><i data-lucide="check" style="width:15px;height:15px"></i> Добавить</button>
 </div></div>
 
@@ -2695,7 +2715,20 @@ function removeMember(name){
   save();renderAll();renderSettings()
 }
 
-function openAddMember(){if(!S.isAdmin){toast('❌ Только Админ');return}document.getElementById('am-name').value='';openModal('m-add-mbr')}
+function pickGender(hiddenId,btn,val){
+  document.getElementById(hiddenId).value=val;
+  btn.closest('.gender-toggle').querySelectorAll('.gtb').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+}
+function openAddMember(){
+  if(!S.isAdmin){toast('❌ Только Админ');return}
+  document.getElementById('am-name').value='';
+  // Reset gender to М
+  document.getElementById('am-gender').value='m';
+  const wrap=document.querySelector('#m-add-mbr .gender-toggle');
+  if(wrap){wrap.querySelectorAll('.gtb').forEach((b,i)=>b.classList.toggle('active',i===0));}
+  openModal('m-add-mbr');
+}
 function saveMember(){
   const name=document.getElementById('am-name').value.trim();
   const gender=document.getElementById('am-gender').value;
