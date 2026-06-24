@@ -3,6 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="color-scheme" content="light">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=DM+Sans:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" rel="stylesheet">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#0a0a0f">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -45,6 +47,48 @@
   --amber:#8a5500;--amglow:rgba(138,85,0,0.14);
   --text:#0d0d1a;--t2:rgba(13,13,26,0.72);--t3:rgba(13,13,26,0.52);
 }
+[data-theme=azure]{
+  --bg:#F7FAFF;--bg2:#EAF1FF;--bg3:#ffffff;
+  --s1:#F2F6FF;--s2:rgba(45,107,255,0.07);
+  --b1:rgba(45,107,255,0.14);--b2:rgba(45,107,255,0.24);
+  --accent:#2D6BFF;--ac2:#5B8CFF;--aglow:rgba(45,107,255,0.22);
+  --green:#12A150;--gglow:rgba(18,161,80,0.16);
+  --red:#E5484D;--rglow:rgba(229,72,77,0.16);
+  --amber:#B45309;--amglow:rgba(180,83,9,0.16);
+  --text:#0E1B3D;--t2:rgba(14,27,61,0.56);--t3:rgba(14,27,61,0.36);
+  --font:'Manrope',sans-serif;
+}
+[data-theme=midnight]{
+  --bg:#0F1117;--bg2:#181B24;--bg3:#181B24;
+  --s1:#1F2330;--s2:rgba(255,255,255,0.06);
+  --b1:#2A2F3E;--b2:rgba(255,255,255,0.15);
+  --accent:#CDEB45;--ac2:#B8D630;--aglow:rgba(205,235,69,0.24);
+  --green:#CDEB45;--gglow:rgba(205,235,69,0.18);
+  --red:#FF7A6B;--rglow:rgba(255,122,107,0.18);
+  --amber:#FBBF24;--amglow:rgba(251,191,36,0.18);
+  --text:#ECEEF2;--t2:rgba(236,238,242,0.55);--t3:rgba(236,238,242,0.32);
+  --font:'DM Sans',sans-serif;
+}
+[data-theme=fresh]{
+  --bg:#F4F7F2;--bg2:#EEF2EC;--bg3:#ffffff;
+  --s1:#EEF2EC;--s2:rgba(17,122,82,0.07);
+  --b1:rgba(17,122,82,0.14);--b2:rgba(17,122,82,0.24);
+  --accent:#117A52;--ac2:#0D6544;--aglow:rgba(17,122,82,0.20);
+  --green:#117A52;--gglow:rgba(17,122,82,0.16);
+  --red:#C2410C;--rglow:rgba(194,65,12,0.16);
+  --amber:#92400E;--amglow:rgba(146,64,14,0.14);
+  --text:#16241E;--t2:rgba(22,36,30,0.56);--t3:rgba(22,36,30,0.36);
+  --font:'Plus Jakarta Sans',sans-serif;
+}
+/* Theme picker */
+.theme-picker{display:flex;gap:10px;padding:4px 0;flex-wrap:wrap}
+.theme-chip{width:40px;height:40px;border-radius:50%;border:3px solid transparent;cursor:pointer;transition:transform 0.15s,border-color 0.15s;outline:none;box-shadow:0 2px 6px rgba(0,0,0,0.15)}
+.theme-chip.active{border-color:var(--accent);transform:scale(1.18)}
+.tp-dark{background:linear-gradient(135deg,#0a0a0f 40%,#6c63ff)}
+.tp-light{background:linear-gradient(135deg,#f2f2fb 40%,#4c44e8)}
+.tp-azure{background:linear-gradient(135deg,#EAF1FF 40%,#2D6BFF)}
+.tp-midnight{background:linear-gradient(135deg,#0F1117 40%,#CDEB45)}
+.tp-fresh{background:linear-gradient(135deg,#EEF2EC 40%,#117A52)}
 @media(prefers-color-scheme:light){
   :root:not([data-theme=dark]){
     --bg:#f2f2fb;--bg2:#e6e6f5;--bg3:#d6d6ec;
@@ -652,7 +696,13 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
       <!-- Theme -->
       <div class="sec">
         <div class="sec-hd"><span class="sec-ttl">Внешний вид</span></div>
-        <button id="set-theme-btn" class="btn btn-s btn-fw" onclick="toggleTheme()"><i data-lucide="sun" style="width:16px;height:16px"></i> Светлая тема</button>
+        <div class="theme-picker">
+          <button class="theme-chip tp-dark"     onclick="setTheme('dark')"     title="Тёмная"></button>
+          <button class="theme-chip tp-light"    onclick="setTheme('light')"    title="Светлая"></button>
+          <button class="theme-chip tp-azure"    onclick="setTheme('azure')"    title="Azure"></button>
+          <button class="theme-chip tp-midnight" onclick="setTheme('midnight')" title="Midnight"></button>
+          <button class="theme-chip tp-fresh"    onclick="setTheme('fresh')"    title="Fresh"></button>
+        </div>
       </div>
       <!-- Danger zone -->
       <div class="sec">
@@ -3595,17 +3645,17 @@ function goPage(id,btn){
   if(id==='pg-exp')renderExpenses();
   if(id==='pg-set')renderSettings();
 }
-function toggleTheme(){
-  const cur=document.documentElement.getAttribute('data-theme')||'';
-  const t=cur==='light'?'dark':'light';
+function setTheme(t){
   document.documentElement.setAttribute('data-theme',t);
   localStorage.setItem('sw_theme',t);
-  // Update toggle button icon in settings
-  const tBtn=document.getElementById('set-theme-btn');
-  if(tBtn)tBtn.innerHTML=t==='light'
-    ?'<i data-lucide="moon" style="width:16px;height:16px"></i> Тёмная тема'
-    :'<i data-lucide="sun" style="width:16px;height:16px"></i> Светлая тема';
+  document.querySelectorAll('.theme-chip').forEach(b=>b.classList.remove('active'));
+  const chip=document.querySelector('.tp-'+t);
+  if(chip)chip.classList.add('active');
   initializeIcons();
+}
+function toggleTheme(){
+  const cur=document.documentElement.getAttribute('data-theme')||'dark';
+  setTheme(cur==='dark'?'light':'dark');
 }
 
 // =======================================================
@@ -4020,8 +4070,11 @@ function init(){
   initializeIcons();
 
   // Восстанавливаем тему (если явно выбрана, иначе — системная через CSS media query)
-  const savedTheme=localStorage.getItem('sw_theme');
-  if(savedTheme){document.documentElement.setAttribute('data-theme',savedTheme);}
+  const savedTheme=localStorage.getItem('sw_theme')||'dark';
+  document.documentElement.setAttribute('data-theme',savedTheme);
+  document.querySelectorAll('.theme-chip').forEach(b=>b.classList.remove('active'));
+  const activeChip=document.querySelector('.tp-'+savedTheme);
+  if(activeChip)activeChip.classList.add('active');
   // else: data-theme не ставим — CSS @media(prefers-color-scheme) сработает автоматически
 
   // Регистрируем Service Worker
