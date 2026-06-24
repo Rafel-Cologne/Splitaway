@@ -298,6 +298,7 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
 /* PULSE */
 .pulse{width:7px;height:7px;border-radius:50%;background:var(--green);animation:pls 2s infinite}
 @keyframes pls{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.5;transform:scale(0.75)}}
+@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
 
 /* FAB */
 .fab{position:fixed;bottom:calc(var(--nh) + var(--sb) + 14px);right:18px;z-index:90;width:52px;height:52px;border-radius:15px;background:var(--accent);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 18px var(--aglow),0 0 36px var(--aglow);transition:all 0.18s;color:#fff}
@@ -994,6 +995,16 @@ function isAdm(name){return name===S.adminName||(S.coAdmins||[]).includes(name);
 
 let CT = {members:[]};
 let _sbSyncing  = false;
+// ── Grouped debt store ──────────────────────────────────────────────────────
+// Хранит объекты долга по UUID-ключу, назначаемому при рендере.
+// DOM получает только ключ (data-debt-id), никакие пользовательские данные
+// не передаются через onclick / HTML-атрибуты.
+const groupedDebtStore = new Map();
+// Состояние модала детального просмотра группового долга
+// (нужно для кнопки «Погасить всё» внутри модала)
+let _debtDetailState = null;
+// Флаг: операция погашения долга уже выполняется (защита от двойного нажатия)
+let _settlePending = false;
 let _lastSyncTime = 0;   // timestamp последнего нашего sbSync
 let _syncTimer  = null;
 let _rtChannel  = null;
@@ -1790,6 +1801,12 @@ function buildGroupedDebts(rawDebts){
 }
 function renderGroupedDebtRow(gd,numbered){
   const{fromInfo,toInfo,amount}=gd;
+
+  // Сохраняем объект долга в Map, в DOM передаём только UUID-ключ.
+  // Это предотвращает любую передачу пользовательских данных через HTML-атрибуты.
+  const debtId=uid();
+  groupedDebtStore.set(debtId,gd);
+
   const fromAv=fromInfo.isGroup
     ?`<div style="position:relative;width:34px;height:26px;flex-shrink:0">${fromInfo.members.slice(0,2).map((m,i)=>`<div class="av av-sm" style="background:${ac(m)};position:absolute;${i===0?'left:0':'left:12px'};top:0;width:22px;height:22px;font-size:0.63rem;box-shadow:0 0 0 2px var(--bg)">${escHtml(m[0]||'?')}</div>`).join('')}</div>`
     :`<div class="av av-sm" style="background:${ac(fromInfo.label)}">${escHtml(fromInfo.label[0]||'?')}</div>`;
@@ -1801,11 +1818,18 @@ function renderGroupedDebtRow(gd,numbered){
     :`<span style="color:${ac(toInfo.label)};font-weight:600">${escHtml(toInfo.label)}</span>`;
   const owesStr=fromInfo.members.length>1?'должны':owes(fromInfo.members[0]);
   const numBadge=numbered!==undefined?`<div style="width:19px;height:19px;border-radius:50%;background:var(--s2);display:flex;align-items:center;justify-content:center;font-size:0.68rem;font-weight:700;color:var(--t2);flex-shrink:0">${numbered+1}</div>`:'';
-  const clickable=(!fromInfo.isGroup&&!toInfo.isGroup)?`onclick="showDebtDetail('${escHtml(fromInfo.members[0])}','${escHtml(toInfo.members[0])}',${amount})"`:
-    `onclick="showGroupDebtDetail(${JSON.stringify(fromInfo)},${JSON.stringify(toInfo)},${amount})"`;
-  const fm2=JSON.stringify(fromInfo.members),tm2=JSON.stringify(toInfo.members),fl=JSON.stringify(fromInfo.label),tl=JSON.stringify(toInfo.label);
-  const settleBtn=numbered===undefined?`<button class="btn btn-green btn-sm" onclick="event.stopPropagation();settleGroupedDebt(${fm2},${tm2},${amount},${fl},${tl})" title="Отметить как погашен" style="padding:5px 10px;font-size:0.75rem">✓</button>`:'';
-  return `<div class="dr" style="cursor:pointer" ${clickable}>${numBadge}${fromAv}<div style="flex:1;font-size:0.86rem;min-width:0">${fromLbl}<span style="color:var(--t2)"> ${owesStr} </span>${toLbl}</div><div style="display:flex;align-items:center;gap:7px"><div class="da neg">${fm(amount)} €</div>${settleBtn}</div></div>`;
+
+  // Определяем действие строки: группа или индивидуал.
+  // Никаких данных в атрибутах — только debtId (UUID, не пользовательские данные).
+  const isGroupDebt=fromInfo.isGroup||toInfo.isGroup;
+  const rowAction=isGroupDebt?'show-group-debt':'show-individual-debt';
+
+  // Кнопка погашения показывается только в режиме без нумерации (вкладка Долги).
+  const settleBtn=numbered===undefined
+    ?`<button class="btn btn-green btn-sm" data-action="settle-debt" data-debt-id="${debtId}" title="Отметить как погашен" style="padding:5px 10px;font-size:0.75rem">✓</button>`
+    :'';
+
+  return `<div class="dr" style="cursor:pointer" data-action="${rowAction}" data-debt-id="${debtId}">${numBadge}${fromAv}<div style="flex:1;font-size:0.86rem;min-width:0">${fromLbl}<span style="color:var(--t2)"> ${owesStr} </span>${toLbl}</div><div style="display:flex;align-items:center;gap:7px"><div class="da neg">${fm(amount)} €</div>${settleBtn}</div></div>`;
 }
 function settleGroupedDebt(fromMembers,toMembers,totalAmount,fromLabel,toLabel){
   if(!S.settledDebts)S.settledDebts=[];
@@ -1822,10 +1846,13 @@ function settleGroupedDebt(fromMembers,toMembers,totalAmount,fromLabel,toLabel){
   toast('✅ Погашено: '+fromLabel+' → '+toLabel+' '+fm(totalAmount)+' €');
 }
 function showGroupDebtDetail(fromInfo,toInfo,amount){
-  // Показываем детальную разбивку по участникам группы
+  // Сохраняем состояние в JS-переменную (не в DOM).
+  // Кнопка «Погасить всё» использует data-action="settle-from-modal" —
+  // никаких пользовательских данных в HTML-атрибутах.
+  _debtDetailState={fromInfo,toInfo,amount};
+
   const bal=calcBal();const rawDebts=simplify(bal);
   const parts=rawDebts.filter(d=>fromInfo.members.includes(d.from)&&toInfo.members.includes(d.to));
-  const fm2=JSON.stringify(fromInfo.members),tm2=JSON.stringify(toInfo.members),fl=JSON.stringify(fromInfo.label),tl=JSON.stringify(toInfo.label);
   const html=`<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px">
     <div><div style="font-weight:700;font-size:1.1rem">Долг группы</div>
     <div style="font-size:0.82rem;color:var(--t2);margin-top:3px"><span style="color:var(--red);font-weight:700">${escHtml(fromInfo.label)}</span> → <span style="color:${ac(toInfo.label)};font-weight:600">${escHtml(toInfo.label)}</span></div></div>
@@ -1840,9 +1867,126 @@ function showGroupDebtDetail(fromInfo,toInfo,amount){
     <div style="flex:1;font-size:0.85rem"><span style="color:${ac(d.from)};font-weight:600">${escHtml(d.from)}</span> → <span style="color:${ac(d.to)};font-weight:600">${escHtml(d.to)}</span></div>
     <div class="da neg">${fm(d.amount)} €</div>
   </div>`).join('')}
-  <button class="btn btn-green btn-fw" style="margin-top:16px" onclick="closeModal('m-debt-detail');settleGroupedDebt(${fm2},${tm2},${amount},${fl},${tl})"><i data-lucide="check" style="width:15px;height:15px"></i> Погасить всё</button>`;
+  <div id="m-debt-settle-error" style="display:none;color:var(--red);font-size:0.82rem;background:rgba(220,38,38,0.08);border:1px solid rgba(220,38,38,0.25);border-radius:var(--r);padding:9px 12px;margin-top:10px"></div>
+  <button class="btn btn-green btn-fw" style="margin-top:10px" data-action="settle-from-modal"><i data-lucide="check" style="width:15px;height:15px"></i> Погасить всё</button>`;
   document.getElementById('m-debt-detail-content').innerHTML=html;
   openModal('m-debt-detail');initializeIcons();
+}
+
+// ── Pessimistic settle: ждёт подтверждения Supabase перед обновлением UI ───
+// gd        — объект долга из groupedDebtStore
+// settleBtn — кнопка, которую нажал пользователь (для loading state)
+// isModal   — true если вызов из модала (не закрываем модал до success)
+async function doSettleGroupedDebt(gd, settleBtn, isModal){
+  if(_settlePending)return; // уже идёт операция — игнорируем
+  _settlePending=true;
+
+  const{fromInfo,toInfo,amount}=gd;
+
+  // Loading state — блокируем кнопку и показываем спиннер
+  const origInner=settleBtn?settleBtn.innerHTML:null;
+  if(settleBtn){settleBtn.disabled=true;settleBtn.innerHTML='<span style="display:inline-flex;align-items:center;gap:6px"><svg style="animation:spin 1s linear infinite;width:14px;height:14px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Сохраняю...</span>';}
+
+  // Скрываем предыдущую ошибку в модале (если была)
+  const errEl=document.getElementById('m-debt-settle-error');
+  if(errEl){errEl.textContent='';errEl.style.display='none';}
+
+  // Снимок текущего состояния — для rollback при ошибке
+  const backup=(S.settledDebts||[]).map(x=>({...x}));
+
+  // Применяем мутацию к S.settledDebts
+  if(!S.settledDebts)S.settledDebts=[];
+  const groupSettleId=uid();
+  const bal=calcBal();const rawDebts=simplify(bal);
+  const matching=rawDebts.filter(d=>fromInfo.members.includes(d.from)&&toInfo.members.includes(d.to));
+  if(matching.length===0){
+    S.settledDebts.push({id:uid(),from:fromInfo.members[0],to:toInfo.members[0],amount,date:today(),groupSettleId});
+  }else{
+    matching.forEach(d=>S.settledDebts.push({id:uid(),from:d.from,to:d.to,amount:d.amount,date:today(),groupSettleId}));
+  }
+
+  // Сохраняем в localStorage немедленно (данные не теряются даже при ошибке сети)
+  saveLocal();
+
+  // Ждём подтверждения Supabase (если включён)
+  let ok=true;
+  if(USE_SUPABASE&&S.trip){
+    clearTimeout(_syncTimer); // отменяем отложенный debounce, синхронизируем прямо сейчас
+    ok=await sbSync();
+  }
+
+  if(ok){
+    // ✅ Успех — теперь обновляем UI
+    if(isModal)closeModal('m-debt-detail');
+    _debtDetailState=null;
+    renderBalances();renderDash();
+    toast('✅ Погашено: '+fromInfo.label+' → '+toInfo.label+' '+fm(amount)+' €');
+  }else{
+    // ❌ Ошибка Supabase — откат: восстанавливаем состояние и UI
+    S.settledDebts=backup;
+    saveLocal(); // сбрасываем localStorage обратно
+    if(settleBtn){settleBtn.disabled=false;settleBtn.innerHTML=origInner;}
+    const errMsg='Не удалось сохранить. Проверьте подключение и повторите.';
+    if(isModal&&errEl){
+      // В модале — показываем ошибку внутри, не закрываем модал
+      errEl.textContent=errMsg;errEl.style.display='block';
+    }else{
+      toast('❌ '+errMsg);
+    }
+  }
+
+  _settlePending=false;
+}
+
+// ── Event delegation для групповых долгов ──────────────────────────────────
+// Единая точка обработки кликов по строкам долгов и кнопкам погашения.
+// Данные читаются из groupedDebtStore / _debtDetailState, не из DOM.
+async function handleDebtAction(e){
+  const actionEl=e.target.closest('[data-action]');
+  if(!actionEl)return;
+  const action=actionEl.dataset.action;
+
+  if(action==='settle-debt'){
+    // Кнопка ✓ внутри строки — погашение без открытия модала.
+    e.stopPropagation();
+    const gd=groupedDebtStore.get(actionEl.dataset.debtId);
+    if(!gd){
+      toast('ℹ️ Список долгов обновился. Повторите действие.');
+      renderBalances();
+      return;
+    }
+    await doSettleGroupedDebt(gd,actionEl,false);
+
+  }else if(action==='show-group-debt'){
+    const gd=groupedDebtStore.get(actionEl.dataset.debtId);
+    if(!gd){
+      toast('ℹ️ Список долгов обновился. Повторите действие.');
+      renderBalances();
+      return;
+    }
+    showGroupDebtDetail(gd.fromInfo,gd.toInfo,gd.amount);
+
+  }else if(action==='show-individual-debt'){
+    const gd=groupedDebtStore.get(actionEl.dataset.debtId);
+    if(!gd){
+      toast('ℹ️ Список долгов обновился. Повторите действие.');
+      renderBalances();
+      return;
+    }
+    showDebtDetail(gd.fromInfo.members[0],gd.toInfo.members[0],gd.amount);
+
+  }else if(action==='settle-from-modal'){
+    // Кнопка «Погасить всё» внутри модала.
+    // _settlePending guard предотвращает двойное нажатие.
+    if(!_debtDetailState||_settlePending)return;
+    const snap={...gd_snap(_debtDetailState)};
+    await doSettleGroupedDebt(snap,actionEl,true);
+  }
+}
+
+// Вспомогательная: строит временный gd-объект из _debtDetailState
+function gd_snap(state){
+  return{fromInfo:state.fromInfo,toInfo:state.toInfo,amount:state.amount};
 }
 
 function balTab(tab,btn){
@@ -1851,6 +1995,10 @@ function balTab(tab,btn){
   btn.classList.add('active');renderBalances()
 }
 function renderBalances(){
+  // Очищаем store перед каждым рендером — после этого вызова
+  // renderGroupedDebtRow() заполнит Map свежими UUID для текущего состояния.
+  // Важно очищать ДО любого вызова renderGroupedDebtRow(), не внутри него.
+  groupedDebtStore.clear();
   const el=document.getElementById('bal-content');
   const bal=calcBal();const debts=simplify(bal);
   if(S.balTab==='debts'){
@@ -3759,9 +3907,9 @@ function ensureUUID(id){
 // Если есть invite_token — через защищённый RPC (новый путь)
 // Иначе — прямые запросы к таблицам (старые поездки, backward compat)
 async function sbSync(){
-  if(!S.trip)return;
+  if(!S.trip)return true;   // нет поездки — localStorage достаточно
   const sb=await getSupabase();
-  if(!sb)return;
+  if(!sb)return true;       // нет Supabase — localStorage достаточно
   _sbSyncing=true;
   _lastSyncTime=Date.now();
   // Показываем состояние "синхронизируется" (оранжевый, без пульсации)
@@ -3802,10 +3950,12 @@ async function sbSync(){
     }
     // Успешно — зелёный индикатор
     if(_ind){_ind.style.background='var(--green)';_ind.style.animation='pls 2s infinite';}
+    return true;
   }catch(err){
     console.warn('[SB] Sync error:',err.message||err);
     // Ошибка — красный индикатор
     if(_ind){_ind.style.background='var(--red)';_ind.style.animation='none';}
+    return false;
   }finally{
     setTimeout(()=>{_sbSyncing=false;},600);
   }
@@ -4237,6 +4387,11 @@ function init(){
 
   // ── ПВА: не-нативный браузер — показываем подсказку пользователю ──
   // (Всё остальное уже обрабатывается через ?trip= в URL при старте)
+
+  // ── Event delegation для групповых долгов ──────────────────────────────
+  // Регистрируем на document (не на #pg-app) чтобы покрыть модалы,
+  // которые находятся за пределами #pg-app в DOM.
+  document.addEventListener('click', handleDebtAction);
 }
 function pickGender(hiddenId,btn,val){
   document.getElementById(hiddenId).value=val;
