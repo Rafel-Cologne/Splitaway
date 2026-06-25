@@ -1005,7 +1005,14 @@ const groupedDebtStore = new Map();
 let _debtDetailState = null;
 // Флаг: операция погашения долга уже выполняется (защита от двойного нажатия)
 let _settlePending = false;
-let _lastSyncTime = 0;   // timestamp последнего нашего sbSync
+// P0-RT-01: разделённые состояния локальной записи и удалённого чтения
+let _lastLocalMutationAt = 0; // время успешного завершения нашего sbSync
+let _lastRemoteRefreshAt = 0; // время успешной loadFromSupabase
+let _isRemoteLoading     = false; // loadFromSupabase выполняется прямо сейчас
+let _remoteRefreshQueued = false; // RT-событие пришло пока нельзя обновлять
+let _remoteRefreshTimer  = null;  // debounce timer для RT событий
+let _rtVisController     = null;  // AbortController для visibilitychange
+let _rtConnected         = false; // статус RT подписки (для fallback polling)
 let _syncTimer  = null;
 let _rtChannel  = null;
 
@@ -1063,8 +1070,24 @@ function initializeIcons(root){
 }
 function toast(msg){const w=document.getElementById('tw');const t=document.createElement('div');t.className='toast';t.textContent=msg;w.appendChild(t);setTimeout(()=>t.remove(),3100)}
 function openModal(id){document.getElementById(id).classList.add('open');document.body.style.overflow='hidden'}
-function closeModal(id){document.getElementById(id).classList.remove('open');document.body.style.overflow=''}
-document.addEventListener('click',e=>{if(e.target.classList.contains('ov')){e.target.classList.remove('open');document.body.style.overflow=''}})
+function closeModal(id){
+  document.getElementById(id)?.classList.remove('open');
+  document.body.style.overflow='';
+  // lifecycle: если закрыли protected modal — проверяем queued refresh
+  if(typeof _PROTECTED_MODALS!=='undefined'&&_PROTECTED_MODALS.includes(id)){
+    setTimeout(onProtectedUiFinished,50); // 50ms: ждём пока флаги (_settlePending) обновятся
+  }
+}
+document.addEventListener('click',e=>{
+  if(e.target.classList.contains('ov')){
+    const id=e.target.id;
+    e.target.classList.remove('open');
+    document.body.style.overflow='';
+    if(typeof _PROTECTED_MODALS!=='undefined'&&_PROTECTED_MODALS.includes(id)){
+      setTimeout(onProtectedUiFinished,50);
+    }
+  }
+})
 
 function groupOf(name){return S.groups.find(g=>g.members.includes(name))}
 function units(name){const g=groupOf(name);return g?g.members.length:1}
@@ -1936,6 +1959,7 @@ async function doSettleGroupedDebt(gd, settleBtn, isModal){
   }
 
   _settlePending=false;
+  onProtectedUiFinished(); // проверяем queued RT refresh после settle
 }
 
 // ── Event delegation для групповых долгов ──────────────────────────────────
@@ -3161,7 +3185,10 @@ async function processReceiptImage({imageBase64, mediaType, source}) {
     console.warn('[ReceiptOCR] failed:', e.message);
   } finally {
     clearTimeout(timeoutId);
-    if (_activeReceiptAbort === controller) _activeReceiptAbort = null;
+    if (_activeReceiptAbort === controller) {
+      _activeReceiptAbort = null;
+      onProtectedUiFinished(); // OCR завершён — проверяем queued RT refresh
+    }
   }
 }
 // ─────────────────────────────────────────────────────────────
@@ -3911,7 +3938,7 @@ async function sbSync(){
   const sb=await getSupabase();
   if(!sb)return true;       // нет Supabase — localStorage достаточно
   _sbSyncing=true;
-  _lastSyncTime=Date.now();
+  // _lastLocalMutationAt устанавливается только после success, не в начале
   // Показываем состояние "синхронизируется" (оранжевый, без пульсации)
   const _ind=document.getElementById('rt-indicator');
   if(_ind){_ind.style.background='var(--amber)';_ind.style.animation='none';}
@@ -3948,16 +3975,28 @@ async function sbSync(){
       // Legacy путь: прямые запросы (старые поездки без invite_token)
       await _sbSyncLegacy(sb);
     }
-    // Успешно — зелёный индикатор
+    // Успешно — фиксируем время мутации ПОСЛЕ подтверждения backend
+    _lastLocalMutationAt=Date.now();
     if(_ind){_ind.style.background='var(--green)';_ind.style.animation='pls 2s infinite';}
     return true;
   }catch(err){
     console.warn('[SB] Sync error:',err.message||err);
-    // Ошибка — красный индикатор
     if(_ind){_ind.style.background='var(--red)';_ind.style.animation='none';}
     return false;
   }finally{
-    setTimeout(()=>{_sbSyncing=false;},600);
+    // 600ms буфер: RT-событие от нашей записи может прийти чуть позже success
+    setTimeout(()=>{
+      _sbSyncing=false;
+      // Если за время sbSync пришли RT-события — обрабатываем безопасно
+      if(_remoteRefreshQueued){
+        if(hasProtectedActiveUi()){
+          // UI занят — показываем banner, не теряем событие
+          showRTBanner();
+        }else{
+          scheduleQueuedRemoteRefresh('post-sync');
+        }
+      }
+    },600);
   }
 }
 
@@ -4081,6 +4120,7 @@ async function loadFromSupabase(tripId){
     }
     // Holder из localStorage как fallback
     if(!S.treasury.holder&&localD?.treasury?.holder)S.treasury.holder=localD.treasury.holder;
+    _lastRemoteRefreshAt=Date.now(); // фиксируем время успешной загрузки
     saveLocal(); // кэшируем в localStorage
     return true;
   }catch(err){
@@ -4092,65 +4132,187 @@ async function loadFromSupabase(tripId){
 // ============================================================
 // REALTIME — подписка на изменения других участников
 // ============================================================
-let _reloadTimer=null;
+// ============================================================
+// P0-RT-01: БЕЗОПАСНАЯ REALTIME АРХИТЕКТУРА
+// ============================================================
 
-async function reloadFromRemote(){
-  clearTimeout(_reloadTimer);
-  _reloadTimer=setTimeout(async()=>{
-    if(!S.trip)return;
-    // Пропускаем если это наши собственные изменения (< 1200ms с нашего последнего sync)
-    if(Date.now()-_lastSyncTime<1200){
-      console.log('[RT] skip — own changes');return;
-    }
-    console.log('[RT] 🔄 Remote change detected, reloading...');
-    const me=S.me,myReceipts=S.receipts||[];
+let _pollTimer=null;
+
+// Модалы с редактируемым/критическим состоянием — не закрываем при RT update
+const _PROTECTED_MODALS=['m-add-exp','m-my-order','m-add-cash','m-edit-cash',
+                         'm-debt-detail','m-rename','m-edit-settled'];
+
+function hasProtectedActiveUi(){
+  // Операция в процессе
+  if(_settlePending||_sbSyncing||_activeReceiptAbort)return true;
+  // Защищённый modal открыт
+  if(_PROTECTED_MODALS.some(id=>document.getElementById(id)?.classList.contains('open')))return true;
+  // Форма расхода имеет несохранённый ввод
+  const nameEl=document.getElementById('ae-name');
+  const amtEl=document.getElementById('ae-amount');
+  if((nameEl&&nameEl.value.trim())||(amtEl&&amtEl.value.trim()))return true;
+  return false;
+}
+
+// Вызывается при каждом RT postgres_changes событии
+function queueRemoteRefresh(reason){
+  if(!S.trip){console.log('[RT] skip — no trip');return;}
+  // sbSync активен — событие может быть от другого участника, НЕ дропаем
+  if(_sbSyncing){
+    console.log('[RT] queued — sbSync active, event buffered:',reason);
+    _remoteRefreshQueued=true; // будет обработан в sbSync finally
+    return;
+  }
+  // Фильтр собственных событий: событие пришло в течение 5с после нашей записи
+  if(Date.now()-_lastLocalMutationAt<5000){
+    console.log('[RT] skip — own event (within 5s of local mutation)');return;
+  }
+  // Защищённый UI активен — откладываем refresh
+  if(hasProtectedActiveUi()){
+    console.log('[RT] refresh queued — protected UI active');
+    _remoteRefreshQueued=true;
+    showRTBanner();
+    return;
+  }
+  // Debounce 800ms: группируем несколько событий от одного sync другого участника
+  clearTimeout(_remoteRefreshTimer);
+  _remoteRefreshTimer=setTimeout(()=>performRemoteRefresh(reason),800);
+}
+
+// Безопасная загрузка удалённых данных с проверками
+async function performRemoteRefresh(reason){
+  if(!S.trip)return;
+  if(_isRemoteLoading){
+    console.log('[RT] refresh skipped — already loading');
+    _remoteRefreshQueued=true;return;
+  }
+  if(_sbSyncing||_settlePending){
+    console.log('[RT] refresh skipped — local operation active');
+    _remoteRefreshQueued=true;return;
+  }
+  console.log('[RT] refresh started ('+reason+')');
+  _isRemoteLoading=true;
+  const me=S.me,myReceipts=S.receipts||[];
+  try{
     const ok=await loadFromSupabase(S.trip.id);
     if(ok){
       S.me=me;
       S.meGender=S.members.find(m=>m.name===me)?.gender||'m';
       S.isAdmin=isAdm(me);
       if(!S.receipts||!S.receipts.length)S.receipts=myReceipts;
-      renderAll();
-      // синхронизация без уведомления
+      if(hasProtectedActiveUi()){
+        // Данные загружены, но UI занят — показываем banner
+        console.log('[RT] refresh finished — protected UI, banner shown');
+        showRTBanner();
+      }else{
+        hideRTBanner();
+        renderAll();
+        console.log('[RT] refresh finished — renderAll done');
+      }
+    }else{
+      console.log('[RT] refresh failed — loadFromSupabase returned false');
     }
-  },1000);
+  }finally{
+    _isRemoteLoading=false;
+    // Если за время загрузки пришли ещё события — обрабатываем один раз
+    if(_remoteRefreshQueued&&!hasProtectedActiveUi()){
+      scheduleQueuedRemoteRefresh('after-load');
+    }
+  }
 }
 
-let _pollTimer=null;
+// Banner: данные обновились, но UI был занят
+function showRTBanner(){
+  if(document.getElementById('rt-update-banner'))return;
+  const b=document.createElement('div');
+  b.id='rt-update-banner';
+  b.style.cssText='position:fixed;bottom:72px;left:50%;transform:translateX(-50%);'+
+    'background:var(--card);border:1px solid var(--b1);border-radius:10px;'+
+    'padding:10px 14px;display:flex;align-items:center;gap:10px;z-index:9999;'+
+    'box-shadow:0 4px 16px rgba(0,0,0,0.15);font-size:0.82rem;max-width:300px;white-space:nowrap';
+  b.innerHTML='<span style="flex:1;overflow:hidden;text-overflow:ellipsis">Данные обновились</span>'+
+    '<button onclick="applyRTUpdate()" style="background:var(--green);color:#fff;border:none;'+
+    'border-radius:6px;padding:4px 10px;cursor:pointer;font-size:0.8rem;white-space:nowrap">Обновить</button>'+
+    '<button onclick="hideRTBanner()" style="background:none;border:none;cursor:pointer;'+
+    'color:var(--t2);font-size:1rem;line-height:1;padding:0 2px">✕</button>';
+  document.body.appendChild(b);
+}
+function hideRTBanner(){
+  const b=document.getElementById('rt-update-banner');if(b)b.remove();
+}
+function applyRTUpdate(){
+  hideRTBanner();
+  if(!hasProtectedActiveUi())renderAll();
+}
+
+// Запускает один queued refresh с debounce (вызывается из sbSync, performRemoteRefresh, onProtectedUiFinished)
+function scheduleQueuedRemoteRefresh(reason){
+  _remoteRefreshQueued=false; // сбрасываем ДО setTimeout — предотвращает loop
+  clearTimeout(_remoteRefreshTimer);
+  _remoteRefreshTimer=setTimeout(()=>performRemoteRefresh(reason||'queued'),800);
+}
+
+// Lifecycle hook: вызывается после закрытия любого protected UI
+// (closeModal, settle finish, OCR finish)
+function onProtectedUiFinished(){
+  if(_remoteRefreshQueued&&!hasProtectedActiveUi()){
+    scheduleQueuedRemoteRefresh('ui-finished');
+  }
+}
+
+// Fallback polling — только при потере RT соединения
+function _startFallbackPolling(){
+  clearInterval(_pollTimer);
+  _pollTimer=setInterval(()=>{
+    if(!S.trip||document.hidden)return; // только при видимой вкладке
+    if(_isRemoteLoading||_sbSyncing||_settlePending)return;
+    console.log('[RT] polling: fallback refresh');
+    performRemoteRefresh('poll-fallback');
+  },60000); // раз в 60 секунд, не 20
+  console.log('[RT] polling enabled — realtime disconnected');
+}
 
 async function startRealtime(){
   if(!USE_SUPABASE||!S.trip)return;
   const sb=await getSupabase();
   if(!sb)return;
+  // Убираем предыдущий channel
   if(_rtChannel){await sb.removeChannel(_rtChannel);_rtChannel=null;}
+  // Убираем предыдущий visibilitychange listener (AbortController)
+  if(_rtVisController)_rtVisController.abort();
+  _rtVisController=new AbortController();
+  // Выключаем polling — RT активен
+  clearInterval(_pollTimer);_pollTimer=null;
+
   _rtChannel=sb.channel(`trip:${S.trip.id}`)
     .on('postgres_changes',{event:'*',schema:'public',table:'expenses',
-      filter:`trip_id=eq.${S.trip.id}`},
-      ()=>reloadFromRemote())
+      filter:`trip_id=eq.${S.trip.id}`},()=>queueRemoteRefresh('rt:expenses'))
     .on('postgres_changes',{event:'*',schema:'public',table:'members',
-      filter:`trip_id=eq.${S.trip.id}`},
-      ()=>reloadFromRemote())
+      filter:`trip_id=eq.${S.trip.id}`},()=>queueRemoteRefresh('rt:members'))
     .on('postgres_changes',{event:'*',schema:'public',table:'groups',
-      filter:`trip_id=eq.${S.trip.id}`},
-      ()=>reloadFromRemote())
+      filter:`trip_id=eq.${S.trip.id}`},()=>queueRemoteRefresh('rt:groups'))
     .on('postgres_changes',{event:'*',schema:'public',table:'treasury',
-      filter:`trip_id=eq.${S.trip.id}`},
-      ()=>reloadFromRemote())
+      filter:`trip_id=eq.${S.trip.id}`},()=>queueRemoteRefresh('rt:treasury'))
     .subscribe(status=>{
       console.log('[RT] Status:',status);
-      updateRTIndicator(status==='SUBSCRIBED');
+      _rtConnected=(status==='SUBSCRIBED');
+      updateRTIndicator(_rtConnected);
+      if(_rtConnected){
+        // RT восстановился — выключаем polling, делаем один refresh
+        clearInterval(_pollTimer);_pollTimer=null;
+        console.log('[RT] polling disabled — realtime connected');
+        if(Date.now()-_lastRemoteRefreshAt>15000)queueRemoteRefresh('rt-reconnect');
+      }else if(status==='CHANNEL_ERROR'||status==='TIMED_OUT'||status==='CLOSED'){
+        _startFallbackPolling();
+      }
     });
 
-  // Polling-fallback: каждые 20 сек проверяем Supabase
-  clearInterval(_pollTimer);
-  _pollTimer=setInterval(()=>{
-    if(S.trip&&Date.now()-_lastSyncTime>5000)reloadFromRemote();
-  },20000);
-
-  // При возврате на вкладку — сразу проверяем
+  // Один visibilitychange listener через AbortController
   document.addEventListener('visibilitychange',()=>{
-    if(!document.hidden&&S.trip&&Date.now()-_lastSyncTime>3000)reloadFromRemote();
-  },{once:false});
+    if(document.hidden||!S.trip)return;
+    // Обновляем только если давно не было refresh (30+ секунд)
+    if(Date.now()-_lastRemoteRefreshAt>30000)queueRemoteRefresh('visibility-return');
+  },{signal:_rtVisController.signal});
 }
 
 function updateRTIndicator(online){
