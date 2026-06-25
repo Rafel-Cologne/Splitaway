@@ -247,10 +247,16 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
 [data-theme=light] #pg-dash .topbar .btn-s,[data-theme=azure] #pg-dash .topbar .btn-s,[data-theme=midnight] #pg-dash .topbar .btn-s,[data-theme=fresh] #pg-dash .topbar .btn-s{background:var(--s1)!important;border-color:var(--b1)!important;color:var(--text)!important}
 [data-theme=light] #pg-dash .topbar .pulse,[data-theme=azure] #pg-dash .topbar .pulse,[data-theme=midnight] #pg-dash .topbar .pulse,[data-theme=fresh] #pg-dash .topbar .pulse{border-color:var(--b1)!important}
 #pg-dash .scr{position:relative;z-index:1}
-/* Hero card: стекло, текст всегда белый */
+/* Hero card: тёмная тема — стекло поверх фото */
 #pg-dash .hero{background:rgba(0,0,0,0.28);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-color:rgba(255,255,255,0.12);color:#fff!important}
 #pg-dash .hero::before{display:none}
 #pg-dash .hero *{color:#fff!important}
+/* Hero card: светлая тема — использует цвета темы */
+[data-theme=light] #pg-dash .hero{background:rgba(255,255,255,0.82);border-color:rgba(0,0,0,0.11);color:var(--text)!important}
+[data-theme=light] #pg-dash .hero *{color:var(--text)!important}
+[data-theme=azure] #pg-dash .hero,[data-theme=fresh] #pg-dash .hero{background:rgba(255,255,255,0.75);border-color:rgba(0,0,0,0.11);color:var(--text)!important}
+[data-theme=azure] #pg-dash .hero *,[data-theme=fresh] #pg-dash .hero *{color:var(--text)!important}
+@media(prefers-color-scheme:light){:root:not([data-theme=dark]):not([data-theme=midnight]) #pg-dash .hero{background:rgba(255,255,255,0.82);border-color:rgba(0,0,0,0.11);color:var(--text)!important}:root:not([data-theme=dark]):not([data-theme=midnight]) #pg-dash .hero *{color:var(--text)!important}}
 
 /* DEBT ROW */
 .dr{display:flex;align-items:center;gap:11px;padding:13px 15px;background:var(--s1);border:1px solid var(--b1);border-radius:var(--rsm)}
@@ -681,12 +687,14 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
       <!-- Groups -->
       <div class="sec">
         <div class="sec-hd"><span class="sec-ttl">Пары и Семьи</span></div>
-        <div style="background:rgba(108,99,255,0.07);border:1px solid rgba(108,99,255,0.18);border-radius:var(--rsm);padding:12px;font-size:0.82rem;color:var(--ac2);margin-bottom:4px">
-          Выберите участников ниже и нажмите «Объединить». 2 человека = Пара, 3+ = Семья
-        </div>
-        <div id="set-member-sel" class="member-sel-wrap"></div>
-        <div style="display:flex;gap:8px;margin-top:4px" id="set-grp-btns" style="display:none">
-          <button class="btn btn-s btn-sm" onclick="createGroup()"><i data-lucide="users" style="width:13px;height:13px"></i> Объединить выбранных</button>
+        <div id="set-grp-admin-wrap">
+          <div style="background:rgba(108,99,255,0.07);border:1px solid rgba(108,99,255,0.18);border-radius:var(--rsm);padding:12px;font-size:0.82rem;color:var(--ac2);margin-bottom:4px">
+            Выберите участников ниже и нажмите «Объединить». 2 человека = Пара, 3+ = Семья
+          </div>
+          <div id="set-member-sel" class="member-sel-wrap"></div>
+          <div style="display:flex;gap:8px;margin-top:4px" id="set-grp-btns">
+            <button class="btn btn-s btn-sm" onclick="createGroup()"><i data-lucide="users" style="width:13px;height:13px"></i> Объединить выбранных</button>
+          </div>
         </div>
         <div id="set-groups" style="display:flex;flex-direction:column;gap:8px;margin-top:6px"></div>
       </div>
@@ -710,11 +718,8 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
       <div class="sec">
         <div class="sec-hd"><span class="sec-ttl">Внешний вид</span></div>
         <div class="theme-picker">
-          <button class="theme-chip tp-dark"     onclick="setTheme('dark')"     title="Тёмная"></button>
-          <button class="theme-chip tp-light"    onclick="setTheme('light')"    title="Светлая"></button>
-          <button class="theme-chip tp-azure"    onclick="setTheme('azure')"    title="Azure"></button>
-          <button class="theme-chip tp-midnight" onclick="setTheme('midnight')" title="Midnight"></button>
-          <button class="theme-chip tp-fresh"    onclick="setTheme('fresh')"    title="Fresh"></button>
+          <button class="theme-chip tp-dark"  onclick="setTheme('dark')"  title="Тёмная" style="display:flex;align-items:center;justify-content:center;font-size:1rem">🌙</button>
+          <button class="theme-chip tp-light" onclick="setTheme('light')" title="Светлая" style="display:flex;align-items:center;justify-content:center;font-size:1rem">☀️</button>
         </div>
       </div>
       <!-- Couple mode -->
@@ -1005,6 +1010,14 @@ const groupedDebtStore = new Map();
 let _debtDetailState = null;
 // Флаг: операция погашения долга уже выполняется (защита от двойного нажатия)
 let _settlePending = false;
+// Пара-режим в форме расхода: pairKey→'each'|repName
+const _aePairStore = new Map();
+// Утилита: постоянный ID устройства для блокировки имён
+function getDeviceId(){
+  let id=localStorage.getItem('_sw_did');
+  if(!id){id=uid();localStorage.setItem('_sw_did',id);}
+  return id;
+}
 // P0-RT-01: разделённые состояния локальной записи и удалённого чтения
 let _lastLocalMutationAt = 0; // время успешного завершения нашего sbSync
 let _lastRemoteRefreshAt = 0; // время успешной loadFromSupabase
@@ -1172,13 +1185,20 @@ async function createTrip(){
 }
 
 function renderPickList(){
+  const myDid=getDeviceId();
   document.getElementById('ob-pick-trip').textContent=S.trip.name;
-  document.getElementById('ob-pick-list').innerHTML=S.members.map(m=>
-    `<button class="btn btn-s btn-fw" data-name="${escHtml(m.name)}" onclick="pickName(this.dataset.name)" style="justify-content:flex-start;gap:11px">
+  document.getElementById('ob-pick-list').innerHTML=S.members.map(m=>{
+    const takenByOther=m.claimed_device&&m.claimed_device!==myDid;
+    return `<button class="btn btn-s btn-fw" data-name="${escHtml(m.name)}"
+      onclick="${takenByOther?'':' pickName(this.dataset.name)'}"
+      style="justify-content:flex-start;gap:11px${takenByOther?';opacity:0.45;cursor:not-allowed':''}">
       <div class="av av-sm" style="background:${ac(m.name)}">${escHtml(m.name[0]||'?')}</div>
       <span style="font-weight:600;color:${ac(m.name)}">${escHtml(m.name)}</span>
-      <span style="color:var(--t3);font-size:0.73rem;margin-left:auto">${m.gender==='f'?'Ж':'М'}</span>
-    </button>`).join('');
+      ${takenByOther
+        ?'<span style="color:var(--t3);font-size:0.7rem;margin-left:auto">🔒 занято</span>'
+        :`<span style="color:var(--t3);font-size:0.73rem;margin-left:auto">${m.gender==='f'?'Ж':'М'}</span>`}
+    </button>`;
+  }).join('');
 }
 // ── ПРИСОЕДИНЕНИЕ ПО QR/ССЫЛКЕ — плавный flow без мигания формы ──
 async function handleWebJoin(tripId, token){
@@ -1265,9 +1285,25 @@ async function joinTrip(){
   S.isAdmin=false;
   showOb('ob-pick');renderPickList();
 }
-function pickName(name){
-  S.me=name;S.meGender=S.members.find(m=>m.name===name)?.gender||'m';
-  S.isAdmin=isAdm(name);launch()
+async function pickName(name){
+  const myDid=getDeviceId();
+  const member=S.members.find(m=>m.name===name);
+  if(!member)return;
+  if(member.claimed_device&&member.claimed_device!==myDid){toast('⚠️ Это имя уже занято другим участником');return;}
+  // Снять старую заявку этого устройства
+  S.members.forEach(m=>{if(m.claimed_device===myDid)m.claimed_device=null;});
+  member.claimed_device=myDid;
+  // Записать в Supabase (в фоне, не ждём)
+  if(typeof USE_SUPABASE!=='undefined'&&USE_SUPABASE){
+    getSupabase().then(sb=>{
+      if(!sb)return;
+      sb.from('members').update({claimed_device:null}).eq('trip_id',S.trip.id).eq('claimed_device',myDid).then(()=>{
+        sb.from('members').update({claimed_device:myDid}).eq('trip_id',S.trip.id).eq('name',name).catch(e=>console.warn('[claim]',e));
+      }).catch(e=>console.warn('[unclaim]',e));
+    });
+  }
+  S.me=name;S.meGender=member.gender||'m';
+  S.isAdmin=isAdm(name);launch();
 }
 
 // =======================================================
@@ -1682,15 +1718,60 @@ function renderAEParticipants(){
   ap.innerHTML=S.members.map(m=>{
     const u=units(m.name);
     return `<label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:7px;border-radius:var(--rxs)">
-      <input type="checkbox" class="ae-check" value="${escHtml(m.name)}" style="accent-color:var(--accent);width:15px;height:15px">
+      <input type="checkbox" class="ae-check" value="${escHtml(m.name)}" style="accent-color:var(--accent);width:15px;height:15px" onchange="renderAEPairOptions()">
       <div class="av av-sm" style="background:${ac(m.name)}">${escHtml(m.name[0]||'?')}</div>
       <span style="font-size:0.86rem;flex:1;color:${ac(m.name)};font-weight:500">${escHtml(m.name)}</span>
       ${u>1?`<span class="bdg bdg-r" style="font-size:0.66rem">×${u}</span>`:''}
     </label>`;
   }).join('');
+  renderAEPairOptions();
 }
 
+function renderAEPairOptions(){
+  // Remove previous pair section if any
+  document.getElementById('ae-pair-section')?.remove();
+  const ap=document.getElementById('ae-participants');
+  if(!ap||!S.groups||!S.groups.length)return;
+  const checked=new Set([...document.querySelectorAll('.ae-check:checked')].map(c=>c.value));
+  // Find pairs that have ≥1 member checked
+  const activePairs=S.groups.filter(g=>g.members.length>=2&&g.members.some(n=>checked.has(n)));
+  if(!activePairs.length)return;
+  const sec=document.createElement('div');
+  sec.id='ae-pair-section';
+  sec.style.cssText='margin-top:8px;display:flex;flex-direction:column;gap:6px';
+  activePairs.forEach(g=>{
+    const pairKey=g.members.slice().sort().join('\x1f');
+    const cur=_aePairStore.get(pairKey)||'each';
+    const block=document.createElement('div');
+    block.style.cssText='padding:10px 12px;border-radius:var(--rxs);border:1px solid rgba(108,99,255,0.25);background:rgba(108,99,255,0.06)';
+    block.dataset.pairKey=pairKey;
+    const label=g.label||(g.members.join(' & '));
+    block.innerHTML=`<div style="font-size:0.77rem;color:var(--t2);margin-bottom:8px">Пара: <b>${escHtml(label)}</b></div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;font-size:0.82rem">
+        <label style="display:flex;align-items:center;gap:5px;cursor:pointer">
+          <input type="radio" name="ae-pr-${escHtml(pairKey)}" data-pair-key="${escHtml(pairKey)}" data-pair-rep="" value="each" ${cur==='each'?'checked':''}>
+          На каждого
+        </label>
+        ${g.members.map(n=>`
+        <label style="display:flex;align-items:center;gap:5px;cursor:pointer">
+          <input type="radio" name="ae-pr-${escHtml(pairKey)}" data-pair-key="${escHtml(pairKey)}" data-pair-rep="${escHtml(n)}" value="${escHtml(n)}" ${cur===n?'checked':''}>
+          Баланс → <b style="color:${ac(n)}">${escHtml(n)}</b>
+        </label>`).join('')}
+      </div>`;
+    sec.appendChild(block);
+  });
+  ap.parentNode.insertBefore(sec,ap.nextSibling);
+}
+
+// Делегированный обработчик для пара-радиокнопок (один раз на страницу)
+document.addEventListener('change',e=>{
+  const r=e.target;
+  if(!r.dataset||!('pairKey' in r.dataset)||r.type!=='radio')return;
+  _aePairStore.set(r.dataset.pairKey, r.dataset.pairRep||'each');
+});
+
 function openAddExp(){
+  _aePairStore.clear();
   document.getElementById('ae-name').value='';
   document.getElementById('ae-amt').value='';
   document.getElementById('ae-comment').value='';
@@ -1752,7 +1833,11 @@ function saveExp(){
   const paidBy=rawPayer;
   const participants=[...document.querySelectorAll('.ae-check:checked')].map(c=>c.value);
   if(!participants.length){toast('⚠️ Выберите участников');return}
-  const exp={id:uid(),name,amount:amt,comment,date,paidBy,participants,fromTreasury:false,items:[]};
+  // Собираем пара-режим: {pairKey: repName} — только для пар с rep≠'each'
+  const pairReps={};
+  _aePairStore.forEach((rep,key)=>{if(rep&&rep!=='each')pairReps[key]=rep;});
+  const exp={id:uid(),name,amount:amt,comment,date,paidBy,participants,fromTreasury:false,items:[],
+    ...(Object.keys(pairReps).length?{pairReps}:{})};
   S.expenses.push(exp);
   save();closeModal('m-add-exp');renderAll();toast('✅ Расход добавлен')
 }
@@ -1768,8 +1853,28 @@ function calcPaid(){
   });
   return p
 }
+// Определить представителя пары для расхода (если pairReps задан)
+function getPairRepForExp(e,name){
+  if(!e.pairReps)return null;
+  const g=groupOf(name);
+  if(!g)return null;
+  const key=g.members.slice().sort().join('\x1f');
+  return e.pairReps[key]||null;
+}
+// Количество единиц для участника с учётом пара-режима
+function unitsForExp(e,name){
+  const rep=getPairRepForExp(e,name);
+  if(rep){
+    const g=groupOf(name);
+    if(name===rep)return g.members.length; // представитель несёт всю долю пары
+    return 0; // остальные члены пары — 0
+  }
+  // 'each' или нет пара-режима: каждый = 1 единица (игнорируем группу)
+  if(e.pairReps){const g=groupOf(name);if(g){const key=g.members.slice().sort().join('\x1f');if(key in e.pairReps)return 1;}}
+  return units(name);
+}
 function perShare(e){
-  let u=0;e.participants.forEach(p=>u+=units(p));
+  let u=0;e.participants.forEach(p=>u+=unitsForExp(e,p));
   return u>0?e.amount/u:e.amount
 }
 function calcBal(){
@@ -1778,7 +1883,10 @@ function calcBal(){
     if(e.fromTreasury)return; // из кассы — долги не начисляются, все уже скинулись
     net[e.paidBy]=(net[e.paidBy]||0)+e.amount;
     const ps=perShare(e);
-    e.participants.forEach(p=>net[p]=(net[p]||0)-ps*units(p));
+    e.participants.forEach(p=>{
+      const u=unitsForExp(e,p);
+      if(u>0)net[p]=(net[p]||0)-ps*u;
+    });
   });
   // Учитываем погашённые долги (платёж from → to уменьшает долг from)
   (S.settledDebts||[]).forEach(sd=>{
@@ -1833,11 +1941,13 @@ function renderGroupedDebtRow(gd,numbered){
   const fromAv=fromInfo.isGroup
     ?`<div style="position:relative;width:34px;height:26px;flex-shrink:0">${fromInfo.members.slice(0,2).map((m,i)=>`<div class="av av-sm" style="background:${ac(m)};position:absolute;${i===0?'left:0':'left:12px'};top:0;width:22px;height:22px;font-size:0.63rem;box-shadow:0 0 0 2px var(--bg)">${escHtml(m[0]||'?')}</div>`).join('')}</div>`
     :`<div class="av av-sm" style="background:${ac(fromInfo.label)}">${escHtml(fromInfo.label[0]||'?')}</div>`;
+  // fromLbl: «♥ Пара» + имена (Andrej, Nadja) или просто имя персоны
   const fromLbl=fromInfo.isGroup
     ?`<span style="color:var(--red);font-weight:700">${escHtml(fromInfo.label)}</span><span style="font-size:0.71rem;color:var(--t2)"> (${fromInfo.members.map(escHtml).join(', ')})</span>`
     :`<span style="color:${ac(fromInfo.label)};font-weight:600">${escHtml(fromInfo.label)}</span>`;
+  // toLbl: показываем имена участников (не метку), чтобы избежать «Пара должны Пара»
   const toLbl=toInfo.isGroup
-    ?`<span style="color:var(--red);font-weight:700">${escHtml(toInfo.label)}</span>`
+    ?`<span style="color:var(--red);font-weight:700">${toInfo.members.map(escHtml).join(' & ')}</span>`
     :`<span style="color:${ac(toInfo.label)};font-weight:600">${escHtml(toInfo.label)}</span>`;
   const owesStr=fromInfo.members.length>1?'должны':owes(fromInfo.members[0]);
   const numBadge=numbered!==undefined?`<div style="width:19px;height:19px;border-radius:50%;background:var(--s2);display:flex;align-items:center;justify-content:center;font-size:0.68rem;font-weight:700;color:var(--t2);flex-shrink:0">${numbered+1}</div>`:'';
@@ -2727,6 +2837,8 @@ function renderSettings(){
   const isAdminUser=S.isAdmin;
   document.getElementById('set-trip-form').style.display=isAdminUser?'':'none';
   document.getElementById('set-add-mbr-btn').style.display=isAdminUser?'':'none';
+  const grpAdminWrap=document.getElementById('set-grp-admin-wrap');
+  if(grpAdminWrap)grpAdminWrap.style.display=isAdminUser?'':'none';
   const grpBtns=document.getElementById('set-grp-btns');
   if(grpBtns)grpBtns.style.display=isAdminUser?'':'none';
   const delBtn=document.getElementById('set-delete-btn');
@@ -3954,7 +4066,8 @@ async function sbSync(){
           comment:e.comment||null,date:e.date||null,
           paid_by:e.paidBy,participants:e.participants||[],
           from_treasury:e.fromTreasury||false,items:e.items||[],
-          created_by:e.createdBy||null
+          created_by:e.createdBy||null,
+          pair_reps:e.pairReps||null
         })),
         treasury:{
           total:S.treasury.total||0,
@@ -4010,7 +4123,7 @@ async function _sbSyncLegacy(sb){
   // 2. Участники
   if(S.members.length){
     await sb.from('members').upsert(
-      S.members.map(m=>({trip_id:S.trip.id,name:m.name,gender:m.gender||'m',is_admin:isAdm(m.name)})),
+      S.members.map(m=>({trip_id:S.trip.id,name:m.name,gender:m.gender||'m',is_admin:isAdm(m.name),...(m.claimed_device?{claimed_device:m.claimed_device}:{})})),
       {onConflict:'trip_id,name'}
     );
     await sb.from('members').delete()
@@ -4040,7 +4153,8 @@ async function _sbSyncLegacy(sb){
         id:ensureUUID(e.id),trip_id:S.trip.id,name:e.name,amount:e.amount,
         comment:e.comment||null,date:e.date||null,paid_by:e.paidBy,
         participants:e.participants||[],from_treasury:e.fromTreasury||false,
-        items:e.items||[],created_by:e.createdBy||null
+        items:e.items||[],created_by:e.createdBy||null,
+        pair_reps:e.pairReps||null
       })),
       {onConflict:'id'}
     );
@@ -4092,14 +4206,15 @@ async function loadFromSupabase(tripId){
     const adminList=(mRes.data||[]).filter(m=>m.is_admin).map(m=>m.name);
     S.adminName=adminList[0]||(mRes.data||[])[0]?.name||'';
     S.coAdmins=adminList.slice(1); // остальные admins — co-admins
-    S.members=(mRes.data||[]).map(m=>({name:m.name,gender:m.gender||'m'}));
+    S.members=(mRes.data||[]).map(m=>({name:m.name,gender:m.gender||'m',claimed_device:m.claimed_device||null}));
     S.groups=(gRes.data||[]).map(g=>({id:g.id,type:g.type,label:g.label,members:g.members||[]}));
     S.expenses=(eRes.data||[]).map(e=>({
       id:e.id,name:e.name,amount:parseFloat(e.amount),
       comment:e.comment||'',date:e.date||'',
       paidBy:e.paid_by,participants:e.participants||[],
       fromTreasury:e.from_treasury||false,items:e.items||[],
-      createdBy:e.created_by||null
+      createdBy:e.created_by||null,
+      pairReps:e.pair_reps||null
     }));
     S.treasury={
       total:parseFloat(trRes.data?.total||0),
@@ -4439,8 +4554,10 @@ if('serviceWorker' in navigator){
 function init(){
   initializeIcons();
 
-  // Восстанавливаем тему (если явно выбрана, иначе — системная через CSS media query)
-  const savedTheme=localStorage.getItem('sw_theme')||'dark';
+  // Восстанавливаем тему (только dark/light; остальные мигрируем на dark)
+  const _rawTheme=localStorage.getItem('sw_theme')||'dark';
+  const savedTheme=(['dark','light'].includes(_rawTheme)?_rawTheme:'dark');
+  if(savedTheme!==_rawTheme)localStorage.setItem('sw_theme','dark');
   document.documentElement.setAttribute('data-theme',savedTheme);
   document.querySelectorAll('.theme-chip').forEach(b=>b.classList.remove('active'));
   const activeChip=document.querySelector('.tp-'+savedTheme);
