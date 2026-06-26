@@ -255,11 +255,11 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
 #pg-dash .hero::before{display:none}
 #pg-dash .hero *{color:#fff!important}
 /* Hero card: светлая тема — использует цвета темы */
-[data-theme=light] #pg-dash .hero{background:rgba(255,255,255,0.45);border-color:rgba(255,255,255,0.55);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);color:var(--text)!important}
+[data-theme=light] #pg-dash .hero{background:rgba(255,255,255,0.22);border-color:rgba(255,255,255,0.28);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);color:var(--text)!important}
 [data-theme=light] #pg-dash .hero *{color:var(--text)!important}
-[data-theme=azure] #pg-dash .hero,[data-theme=fresh] #pg-dash .hero{background:rgba(255,255,255,0.45);border-color:rgba(255,255,255,0.55);color:var(--text)!important}
+[data-theme=azure] #pg-dash .hero,[data-theme=fresh] #pg-dash .hero{background:rgba(255,255,255,0.22);border-color:rgba(255,255,255,0.28);color:var(--text)!important}
 [data-theme=azure] #pg-dash .hero *,[data-theme=fresh] #pg-dash .hero *{color:var(--text)!important}
-@media(prefers-color-scheme:light){:root:not([data-theme=dark]):not([data-theme=midnight]) #pg-dash .hero{background:rgba(255,255,255,0.45);border-color:rgba(255,255,255,0.55);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);color:var(--text)!important}:root:not([data-theme=dark]):not([data-theme=midnight]) #pg-dash .hero *{color:var(--text)!important}}
+@media(prefers-color-scheme:light){:root:not([data-theme=dark]):not([data-theme=midnight]) #pg-dash .hero{background:rgba(255,255,255,0.22);border-color:rgba(255,255,255,0.28);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);color:var(--text)!important}:root:not([data-theme=dark]):not([data-theme=midnight]) #pg-dash .hero *{color:var(--text)!important}}
 
 /* DEBT ROW */
 .dr{display:flex;align-items:center;gap:11px;padding:13px 15px;background:var(--s1);border:1px solid var(--b1);border-radius:var(--rsm)}
@@ -727,13 +727,17 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
       </div>
       <!-- Couple mode -->
       <div class="sec" id="sec-couple-mode" style="display:none">
-        <div class="sec-hd"><span class="sec-ttl">Расчёт баланса</span></div>
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0">
-          <div style="font-size:0.88rem;color:var(--t2)">Считать пары как одно целое</div>
+        <div class="sec-hd"><span class="sec-ttl">Расчёт для пары</span></div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;gap:12px">
+          <div style="flex:1">
+            <div style="font-size:0.88rem;font-weight:600;color:var(--text)" id="couple-mode-label">Считать вместе</div>
+            <div style="font-size:0.78rem;color:var(--t2);margin-top:2px" id="couple-mode-desc">Один платит за двоих</div>
+          </div>
           <button id="couple-mode-btn" onclick="toggleCoupleMode()" style="width:46px;height:26px;border-radius:13px;border:none;cursor:pointer;position:relative;transition:background 0.2s;flex-shrink:0">
             <span style="position:absolute;top:3px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,0.3);transition:left 0.2s" id="couple-mode-knob"></span>
           </button>
         </div>
+        <div style="font-size:0.75rem;color:var(--t3);padding:4px 0 2px" id="couple-mode-example"></div>
       </div>
       <!-- Danger zone -->
       <div class="sec">
@@ -844,27 +848,34 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
 <div class="ov" id="m-my-order"><div class="mdl" style="max-height:92vh;display:flex;flex-direction:column">
   <div class="mdl-handle"></div>
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-    <div class="mdl-title">✏️ Мой заказ</div>
+    <div class="mdl-title">✏️ Заказ</div>
     <button class="btn btn-g btn-sm btn-ic" onclick="closeModal('m-my-order')"><i data-lucide="x" style="width:15px;height:15px"></i></button>
   </div>
   <div style="overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:13px">
-    <!-- Participant selector -->
+    <!-- Payer at top -->
     <div class="iw">
-      <label class="il">Для кого заказ?</label>
-      <div id="mo-participant" style="display:flex;gap:7px;flex-wrap:wrap"></div>
+      <label class="il">Кто оплатил?</label>
+      <div id="mo-payer" style="display:flex;gap:7px;flex-wrap:wrap"></div>
     </div>
-    <!-- Order text -->
+    <!-- AI text entry -->
     <div class="iw">
-      <label class="il" id="mo-order-label">Что заказал?</label>
-      <textarea class="inp" id="mo-txt" placeholder="Пиво 2 по 4€&#10;Салат за 7,50€&#10;Пицца Маргарита 12.90&#10;3 воды - 1.5€" style="min-height:130px;font-size:0.88rem"></textarea>
+      <label class="il">Текст заказа → AI разберёт</label>
+      <textarea class="inp" id="mo-txt" placeholder="Пиво 4 по 2€&#10;1 вино 5€&#10;3 воды - 1.5€" style="min-height:90px;font-size:0.88rem"></textarea>
     </div>
-    <!-- Parse button -->
-    <button class="btn btn-p btn-fw" onclick="parseMyOrder()"><i data-lucide="plus-circle" style="width:14px;height:14px"></i> Добавить мой заказ</button>
+    <button class="btn btn-p btn-fw" onclick="parseMyOrder()"><i data-lucide="sparkles" style="width:14px;height:14px"></i> Разобрать AI</button>
     <!-- Loading -->
     <div id="mo-loading" class="ld" style="display:none"><div class="spin"></div><span>AI разбирает...</span></div>
-    <!-- Parsed result -->
-    <div id="mo-result" style="display:none;flex-direction:column;gap:10px">
-      <div style="display:flex;flex-direction:column;gap:4px" id="mo-items-list"></div>
+    <!-- Items list (shown once items added) -->
+    <div id="mo-result" style="display:none;flex-direction:column;gap:8px">
+      <div style="font-size:0.77rem;color:var(--t2);padding:0 2px">Нажмите на имена под каждой позицией чтобы указать для кого она</div>
+      <div id="mo-items-list" style="display:flex;flex-direction:column;gap:7px"></div>
+      <!-- Manual add row (inside result) -->
+      <div style="display:flex;gap:7px;align-items:center;padding:6px 0 2px">
+        <input class="inp" id="mo-item-name" placeholder="Позиция" style="flex:1;padding:8px 10px;font-size:0.85rem">
+        <input class="inp" id="mo-item-price" type="number" placeholder="€" min="0" step="0.01" style="width:66px;padding:8px 10px;font-size:0.85rem">
+        <button class="btn btn-g btn-sm" onclick="addMoItemManual()" style="padding:8px 12px;flex-shrink:0"><i data-lucide="plus" style="width:14px;height:14px"></i></button>
+      </div>
+      <!-- Total -->
       <div style="display:flex;justify-content:space-between;align-items:center;padding:11px 14px;background:var(--s2);border-radius:var(--rsm)">
         <span style="font-weight:600">Итого:</span>
         <span style="font-family:var(--mono);font-weight:700;font-size:1.1rem;color:var(--green)" id="mo-total">0,00 €</span>
@@ -872,16 +883,20 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
       <!-- Expense name -->
       <div class="iw">
         <label class="il">Название расхода</label>
-        <input class="inp" id="mo-exp-name" placeholder="Ресторан / Магазин...">
+        <input class="inp" id="mo-exp-name" placeholder="Ресторан / Бар...">
       </div>
-      <!-- Payer -->
-      <div class="iw">
-        <label class="il" id="mo-payer-label">Кто оплатил?</label>
-        <div id="mo-payer" style="display:flex;gap:7px;flex-wrap:wrap"></div>
+    </div>
+    <!-- Manual add row (shown when no items yet) -->
+    <div id="mo-manual-hint" style="display:flex;flex-direction:column;gap:6px">
+      <div style="font-size:0.77rem;color:var(--t2)">Или добавьте позиции вручную:</div>
+      <div style="display:flex;gap:7px;align-items:center">
+        <input class="inp" id="mo-item-name-0" placeholder="Позиция" style="flex:1;padding:8px 10px;font-size:0.85rem">
+        <input class="inp" id="mo-item-price-0" type="number" placeholder="€" min="0" step="0.01" style="width:66px;padding:8px 10px;font-size:0.85rem">
+        <button class="btn btn-g btn-sm" onclick="addMoItemManual(true)" style="padding:8px 12px;flex-shrink:0"><i data-lucide="plus" style="width:14px;height:14px"></i></button>
       </div>
     </div>
   </div>
-  <!-- Sticky save button — always visible at bottom when items are added -->
+  <!-- Sticky save button -->
   <div id="mo-save-footer" style="display:none;padding-top:10px;border-top:1px solid var(--b1);margin-top:4px;flex-shrink:0">
     <button class="btn btn-p btn-fw" onclick="saveMyOrder()"><i data-lucide="check" style="width:14px;height:14px"></i> Сохранить расход</button>
   </div>
@@ -1369,6 +1384,12 @@ function renderDash(){
     const groupedDebts=buildGroupedDebts(rawDebts);
     myOwe=groupedDebts.filter(d=>d.fromInfo.key===myKey);
     myOwed=groupedDebts.filter(d=>d.toInfo.key===myKey);
+  } else if(myGrp){
+    // "Считать отдельно": берём суммарный долг пары и делим на кол-во участников
+    const groupedDebts=buildGroupedDebts(rawDebts);
+    const pairSize=myGrp.members.length;
+    myOwe=groupedDebts.filter(d=>d.fromInfo.key===myKey).map(d=>({...d,amount:Math.round(d.amount/pairSize*100)/100,fromInfo:{key:S.me,isGroup:false,members:[S.me]}}));
+    myOwed=groupedDebts.filter(d=>d.toInfo.key===myKey).map(d=>({...d,amount:Math.round(d.amount/pairSize*100)/100,toInfo:{key:S.me,isGroup:false,members:[S.me]}}));
   } else {
     myOwe=rawDebts.filter(d=>d.from===S.me).map(d=>({fromInfo:{key:d.from,isGroup:false,members:[d.from]},toInfo:{key:d.to,isGroup:false,members:[d.to]},amount:d.amount}));
     myOwed=rawDebts.filter(d=>d.to===S.me).map(d=>({fromInfo:{key:d.from,isGroup:false,members:[d.from]},toInfo:{key:d.to,isGroup:false,members:[d.to]},amount:d.amount}));
@@ -1903,6 +1924,13 @@ function calcBal(){
   S.expenses.forEach(e=>{
     if(e.fromTreasury)return; // из кассы — долги не начисляются, все уже скинулись
     net[e.paidBy]=(net[e.paidBy]||0)+e.amount;
+    if(e.splits&&Object.keys(e.splits).length){
+      // Персонализированные доли из "Заказ" (каждый платит за своё)
+      Object.entries(e.splits).forEach(([person,amount])=>{
+        if(Object.prototype.hasOwnProperty.call(net,person))net[person]-=amount;
+      });
+      return;
+    }
     const ps=perShare(e);
     e.participants.forEach(p=>{
       const u=unitsForExp(e,p);
@@ -2705,23 +2733,35 @@ function clearHolder(){
 // =======================================================
 let _moItems=[];// parsed items for current order
 
+let _moListenerAdded=false;
 function openMyOrder(){
   _moItems=[];
   document.getElementById('mo-txt').value='';
   document.getElementById('mo-result').style.display='none';
   document.getElementById('mo-loading').style.display='none';
   document.getElementById('mo-save-footer').style.display='none';
-  // Participant selector
-  const pEl=document.getElementById('mo-participant');
-  pEl.innerHTML=S.members.map(m=>{
+  document.getElementById('mo-manual-hint').style.display='flex';
+  const n0=document.getElementById('mo-item-name-0');const p0=document.getElementById('mo-item-price-0');
+  if(n0)n0.value='';if(p0)p0.value='';
+  // Event delegation for items list (once)
+  if(!_moListenerAdded){
+    document.getElementById('mo-items-list').addEventListener('click',moItemsClick);
+    _moListenerAdded=true;
+  }
+  // Payer selector
+  const remaining=S.treasury.total-S.treasury.spent;
+  const treasury=remaining>0?`<div class="wp" data-mo-payer="_treasury" onclick="selMoPayer(this)" style="border-color:rgba(34,197,94,0.35)">
+    <span>💰</span><span style="color:var(--green);font-weight:600;font-size:0.8rem">Касса (${fm(remaining)} €)</span>
+  </div>`:'';
+  document.getElementById('mo-payer').innerHTML=S.members.map(m=>{
     const canSelect=S.isAdmin||m.name===S.me;
-    return `<div class="wp ${m.name===S.me?'on':''}" data-mo-person="${escHtml(m.name)}"
-      ${canSelect?'onclick="selMoPerson(this,this.dataset.moPerson)"':''}
+    return `<div class="wp ${m.name===S.me?'on':''}" data-mo-payer="${escHtml(m.name)}"
+      ${canSelect?'onclick="selMoPayer(this)"':''}
       style="${!canSelect?'opacity:0.38;cursor:default;pointer-events:none':''}">
       <div class="av av-sm" style="background:${ac(m.name)}">${escHtml(m.name[0]||'?')}</div>
       <span style="color:${ac(m.name)};font-weight:600">${escHtml(m.name)}</span>
     </div>`;
-  }).join('');
+  }).join('')+treasury;
   openModal('m-my-order');initializeIcons();
 }
 
@@ -2743,20 +2783,15 @@ function selMoPayer(el){
 async function parseMyOrder(){
   const t=document.getElementById('mo-txt').value.trim();
   if(!t){toast('⚠️ Введите текст заказа');return}
-  const personEl=document.querySelector('[data-mo-person].on');
-  const person=personEl?personEl.dataset.moPerson:S.me;
-
   document.getElementById('mo-loading').style.display='flex';
   document.getElementById('mo-result').style.display='none';
-
   let items=[];
-  {
-    try{
-      const r=await fetch(`${API_BASE}/api/anthropic`,{
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({model:'claude-3-5-haiku-20241022',max_tokens:800,messages:[{role:'user',content:
-          `Parse this order text. Return ONLY valid JSON: {"items":[{"name":"item name","price":0.00,"qty":1},...]}
+  try{
+    const r=await fetch(`${API_BASE}/api/anthropic`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({model:'claude-3-5-haiku-20241022',max_tokens:800,messages:[{role:'user',content:
+        `Parse this order text. Return ONLY valid JSON: {"items":[{"name":"item name","price":0.00,"qty":1},...]}
 Rules:
 - price = TOTAL for that line (qty*unitPrice)
 - "2 пива по 4€" → {name:"Пиво",qty:2,price:8.00}
@@ -2765,89 +2800,132 @@ Rules:
 - comma as decimal: "7,50" = 7.50
 - Capitalize names
 Text:\n${t}`}]})
-      });
-      const d=await r.json();
-      if(d.error)throw new Error(d.error.message);
-      const txt=(d.content?.[0]?.text||'').replace(/```json|```/g,'').trim();
-      items=(JSON.parse(txt).items||[]).map(it=>({name:it.name,price:parseFloat(it.price)||0,qty:parseInt(it.qty)||1}));
-    }catch(e){console.warn('[AI order parse]',e)}
-  }
-  if(!items.length){
-    items=parseReceiptText(t);
-  }
+    });
+    const d=await r.json();
+    if(d.error)throw new Error(d.error.message);
+    const txt=(d.content?.[0]?.text||'').replace(/```json|```/g,'').trim();
+    items=(JSON.parse(txt).items||[]).map(it=>({name:it.name,price:parseFloat(it.price)||0,qty:parseInt(it.qty)||1}));
+  }catch(e){console.warn('[AI order parse]',e)}
+  if(!items.length)items=parseReceiptText(t);
   document.getElementById('mo-loading').style.display='none';
   if(!items.length){toast('⚠️ Не удалось распознать. Проверьте формат.');return}
+  // Добавляем новые позиции к существующим, assignees = [текущий пользователь]
+  _moItems=[..._moItems,...items.map(it=>({...it,assignees:[S.me]}))];
+  document.getElementById('mo-txt').value='';
+  if(!document.getElementById('mo-exp-name').value)document.getElementById('mo-exp-name').value='Заказ';
+  _moShowResult();
+  renderMoItems();
+  setTimeout(()=>{const sc=document.querySelector('#m-my-order .mdl > div[style*="overflow-y"]');if(sc)sc.scrollTop=sc.scrollHeight;},80);
+}
 
-  _moItems=items;
-  const total=items.reduce((s,it)=>s+it.price,0);
-
-  // Render items
-  document.getElementById('mo-items-list').innerHTML=items.map((it,i)=>`
-    <div style="display:flex;align-items:center;gap:9px;padding:8px 11px;background:var(--s1);border:1px solid var(--b1);border-radius:var(--rsm)">
-      <div style="flex:1;font-size:0.86rem">${escHtml(it.name)}${it.qty>1?` <span style="color:var(--t3);font-size:0.75rem">×${it.qty}</span>`:''}</div>
-      <div style="font-family:var(--mono);font-weight:600;font-size:0.88rem">${fm(it.price)} €</div>
-      <button onclick="removeMoItem(${i})" style="border:none;background:none;color:var(--t3);cursor:pointer;padding:2px"><i data-lucide="x" style="width:12px;height:12px"></i></button>
-    </div>`).join('');
-  document.getElementById('mo-total').textContent=fm(total)+' €';
-  document.getElementById('mo-exp-name').value='Заказ — '+person;
-
-  // Payer selector
-  const remaining=S.treasury.total-S.treasury.spent;
-  const treasury=remaining>0?`<div class="wp" data-mo-payer="_treasury" onclick="selMoPayer(this,'_treasury')" style="border-color:rgba(34,197,94,0.35)">
-    <span>💰</span><span style="color:var(--green);font-weight:600;font-size:0.8rem">Касса (${fm(remaining)} €)</span>
-  </div>`:'';
-  document.getElementById('mo-payer').innerHTML=S.members.map(m=>{
-    const canSelect=S.isAdmin||m.name===S.me;
-    return `<div class="wp ${m.name===S.me?'on':''}" data-mo-payer="${escHtml(m.name)}"
-      ${canSelect?'onclick="selMoPayer(this)"':''}
-      style="${!canSelect?'opacity:0.38;cursor:default;pointer-events:none':''}">
-      <div class="av av-sm" style="background:${ac(m.name)}">${escHtml(m.name[0]||'?')}</div>
-      <span style="color:${ac(m.name)};font-weight:600">${escHtml(m.name)}</span>
-    </div>`;
-  }).join('')+treasury;
-
+function _moShowResult(){
   document.getElementById('mo-result').style.display='flex';
   document.getElementById('mo-save-footer').style.display='block';
-  // Scroll to show save button
-  setTimeout(()=>{const sc=document.querySelector('#m-my-order .mdl > div[style*="overflow-y"]');if(sc)sc.scrollTop=sc.scrollHeight;},50);
+  document.getElementById('mo-manual-hint').style.display='none';
+}
+
+function renderMoItems(){
+  const list=document.getElementById('mo-items-list');
+  if(!list)return;
+  list.innerHTML=_moItems.map((it,i)=>`
+    <div style="background:var(--s1);border:1px solid var(--b1);border-radius:var(--rsm);overflow:hidden">
+      <div style="display:flex;align-items:center;gap:8px;padding:8px 11px">
+        <div style="flex:1">
+          <span style="font-size:0.86rem;font-weight:600">${escHtml(it.name)}</span>
+          ${it.qty>1?`<span style="color:var(--t3);font-size:0.74rem;margin-left:4px">×${it.qty}</span>`:''}
+        </div>
+        <span style="font-family:var(--mono);font-weight:700;font-size:0.9rem;color:var(--accent)">${fm(it.price)} €</span>
+        <button data-action="mo-remove" data-idx="${i}" style="border:none;background:none;color:var(--t3);cursor:pointer;padding:4px;line-height:1">
+          <i data-lucide="x" style="width:13px;height:13px"></i>
+        </button>
+      </div>
+      <div style="padding:5px 10px 9px;border-top:1px solid var(--b1);display:flex;flex-wrap:wrap;gap:5px;align-items:center">
+        <span style="font-size:0.71rem;color:var(--t3);margin-right:1px">Для:</span>
+        ${S.members.map(m=>{
+          const sel=it.assignees.includes(m.name);
+          return `<div data-action="mo-toggle" data-idx="${i}" data-mo-assignee="${escHtml(m.name)}"
+            style="display:inline-flex;align-items:center;gap:3px;padding:3px 9px 3px 5px;border-radius:20px;cursor:pointer;font-size:0.76rem;font-weight:${sel?'700':'400'};
+            background:${sel?'var(--accent)':'var(--b1)'};color:${sel?'#fff':'var(--t2)'};transition:all 0.15s">
+            <div style="width:15px;height:15px;border-radius:50%;background:${ac(m.name)};display:flex;align-items:center;justify-content:center;font-size:0.5rem;color:#fff;font-weight:700;flex-shrink:0">${escHtml((m.name[0]||'?').toUpperCase())}</div>
+            ${escHtml(m.name)}
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`).join('');
+  const total=_moItems.reduce((s,it)=>s+it.price,0);
+  const totEl=document.getElementById('mo-total');
+  if(totEl)totEl.textContent=fm(total)+' €';
   initializeIcons();
 }
 
-function removeMoItem(idx){
-  _moItems.splice(idx,1);
-  if(!_moItems.length){document.getElementById('mo-result').style.display='none';document.getElementById('mo-save-footer').style.display='none';return}
-  const total=_moItems.reduce((s,it)=>s+it.price,0);
-  document.getElementById('mo-total').textContent=fm(total)+' €';
-  document.getElementById('mo-items-list').innerHTML=_moItems.map((it,i)=>`
-    <div style="display:flex;align-items:center;gap:9px;padding:8px 11px;background:var(--s1);border:1px solid var(--b1);border-radius:var(--rsm)">
-      <div style="flex:1;font-size:0.86rem">${escHtml(it.name)}${it.qty>1?` <span style="color:var(--t3);font-size:0.75rem">×${it.qty}</span>`:''}</div>
-      <div style="font-family:var(--mono);font-weight:600;font-size:0.88rem">${fm(it.price)} €</div>
-      <button onclick="removeMoItem(${i})" style="border:none;background:none;color:var(--t3);cursor:pointer;padding:2px"><i data-lucide="x" style="width:12px;height:12px"></i></button>
-    </div>`).join('');
-  initializeIcons();
+function moItemsClick(e){
+  const removeBtn=e.target.closest('[data-action="mo-remove"]');
+  if(removeBtn){
+    const idx=parseInt(removeBtn.dataset.idx);
+    _moItems.splice(idx,1);
+    if(!_moItems.length){
+      document.getElementById('mo-result').style.display='none';
+      document.getElementById('mo-save-footer').style.display='none';
+      document.getElementById('mo-manual-hint').style.display='flex';
+    }else{renderMoItems();}
+    return;
+  }
+  const chip=e.target.closest('[data-action="mo-toggle"]');
+  if(chip){
+    const idx=parseInt(chip.dataset.idx);
+    const name=chip.dataset.moAssignee;
+    const item=_moItems[idx];
+    if(!item)return;
+    const pos=item.assignees.indexOf(name);
+    if(pos===-1){item.assignees.push(name);}
+    else if(item.assignees.length>1){item.assignees.splice(pos,1);}
+    else{toast('⚠️ Хотя бы один участник');}
+    renderMoItems();
+  }
+}
+
+function addMoItemManual(fromHint){
+  const sfx=fromHint?'-0':'';
+  const nameEl=document.getElementById('mo-item-name'+sfx);
+  const priceEl=document.getElementById('mo-item-price'+sfx);
+  const name=(nameEl?nameEl.value.trim():'');
+  const price=parseFloat(priceEl?priceEl.value:'')||0;
+  if(!name){toast('⚠️ Введите название позиции');return;}
+  _moItems.push({name,price,qty:1,assignees:[S.me]});
+  if(nameEl)nameEl.value='';if(priceEl)priceEl.value='';
+  _moShowResult();
+  if(!document.getElementById('mo-exp-name').value)document.getElementById('mo-exp-name').value='Заказ';
+  renderMoItems();
 }
 
 function saveMyOrder(){
   if(!_moItems.length){toast('⚠️ Нет позиций');return}
-  const personEl=document.querySelector('[data-mo-person].on');
-  const person=personEl?personEl.dataset.moPerson:S.me;
+  if(_moItems.some(it=>!it.assignees||!it.assignees.length)){toast('⚠️ Укажите участников для каждой позиции');return}
   const payerEl=document.querySelector('[data-mo-payer].on');
   const payer=payerEl?payerEl.dataset.moPayer:S.me;
-  const name=document.getElementById('mo-exp-name').value.trim()||('Заказ — '+person);
+  const name=document.getElementById('mo-exp-name').value.trim()||'Заказ';
   const total=_moItems.reduce((s,it)=>s+it.price,0);
   if(total<=0){toast('⚠️ Сумма 0');return}
   const fromTreasury=payer==='_treasury';
+  // Рассчитываем personalized splits из позиций
+  const splits={};
+  _moItems.forEach(it=>{
+    const n=it.assignees.length;
+    const pp=Math.round(it.price/n*100)/100;
+    it.assignees.forEach(a=>{splits[a]=Math.round(((splits[a]||0)+pp)*100)/100;});
+  });
+  const participants=Object.keys(splits);
   const exp={
     id:uid(),name,amount:total,comment:'',date:today(),
     paidBy:fromTreasury?'_treasury':payer,
-    participants:[person],
-    fromTreasury,
-    items:_moItems.map(it=>({name:it.name,price:it.price,qty:it.qty||1,assignedTo:person}))
+    participants,splits,fromTreasury,
+    items:_moItems.map(it=>({name:it.name,price:it.price,qty:it.qty||1,assignees:it.assignees}))
   };
   if(fromTreasury)S.treasury.spent+=total;
   S.expenses.push(exp);
   save();closeModal('m-my-order');renderAll();
-  toast('✅ Заказ '+person+' сохранён: '+fm(total)+' €');
+  const parts=Object.entries(splits).map(([n,a])=>n+': '+fm(a)+'€').join(', ');
+  toast('✅ '+fm(total)+' € → '+parts);
 }
 
 function openEditCashList(){
@@ -2920,7 +2998,7 @@ function renderSettings(){
   // Show couple-mode toggle only if user is in a couple
   const myGrpS=groupOf(S.me);
   const secCM=document.getElementById('sec-couple-mode');
-  if(secCM)secCM.style.display=(myGrpS&&myGrpS.type==='couple')?'':'none';
+  if(secCM)secCM.style.display=myGrpS?'':'none';
   updateCoupleModeBtn();
   renderSettingMembers();
   renderSettingGroups();
@@ -4071,8 +4149,22 @@ function updateCoupleModeBtn(){
   const on=isCoupleMode();
   const btn=document.getElementById('couple-mode-btn');
   const knob=document.getElementById('couple-mode-knob');
+  const label=document.getElementById('couple-mode-label');
+  const desc=document.getElementById('couple-mode-desc');
+  const ex=document.getElementById('couple-mode-example');
   if(btn)btn.style.background=on?'var(--accent)':'var(--b1)';
   if(knob)knob.style.left=on?'23px':'3px';
+  const myGrp=groupOf(S.me);
+  const partner=myGrp?myGrp.members.filter(n=>n!==S.me).join(' и '):'партнёр';
+  if(on){
+    if(label)label.textContent='Считать вместе';
+    if(desc)desc.textContent=S.me+' платит за двоих ('+partner+')';
+    if(ex)ex.textContent='Пример: Андрей заплатил 20€ на 4 чел. → '+S.me+' должен 10€ (за вас двоих)';
+  } else {
+    if(label)label.textContent='Считать отдельно';
+    if(desc)desc.textContent='Каждый платит свою долю';
+    if(ex)ex.textContent='Пример: Андрей заплатил 20€ на 4 чел. → '+S.me+' должен 5€, '+partner+' должен 5€';
+  }
 }
 function toggleCoupleMode(){
   localStorage.setItem('sw_couple_mode',isCoupleMode()?'0':'1');
