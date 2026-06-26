@@ -231,21 +231,21 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
 /* Светлая тема: нижняя часть фадится в светлый фон */
 [data-theme=light] #dash-bg-layer::after{background:linear-gradient(180deg,rgba(0,0,0,0.50) 0%,rgba(0,0,0,0.05) 38%,rgba(0,0,0,0.0) 55%,rgba(238,238,250,1) 100%)}
 @media(prefers-color-scheme:light){:root:not([data-theme=dark]) #dash-bg-layer::after{background:linear-gradient(180deg,rgba(0,0,0,0.50) 0%,rgba(0,0,0,0.05) 38%,rgba(0,0,0,0.0) 55%,rgba(238,238,250,1) 100%)}}
-/* Скрываем фото для всех тем кроме дефолтной тёмной */
-[data-theme=light] #dash-bg-layer,[data-theme=azure] #dash-bg-layer,[data-theme=midnight] #dash-bg-layer,[data-theme=fresh] #dash-bg-layer{display:none}
+/* Скрываем фото только для устаревших тем */
+[data-theme=azure] #dash-bg-layer,[data-theme=midnight] #dash-bg-layer,[data-theme=fresh] #dash-bg-layer{display:none}
 #pg-dash .topbar{background:linear-gradient(to bottom,rgba(0,0,0,0.55) 70%,transparent);position:relative;z-index:51}
 /* Текст topbar всегда белый (фото тёмное), в любой теме */
 #pg-dash .topbar .tb-title,#pg-dash .topbar .tb-sub{color:#fff!important}
 #pg-dash .topbar .btn-g{color:rgba(255,255,255,0.85)!important;border-color:rgba(255,255,255,0.22)!important;background:rgba(0,0,0,0.28)!important}
 #pg-dash .topbar .btn-s{background:rgba(0,0,0,0.35)!important;border-color:rgba(255,255,255,0.20)!important;color:#fff!important}
 #pg-dash .topbar .pulse{border-color:rgba(255,255,255,0.3)!important}
-/* Без фото — topbar использует переменные темы */
-[data-theme=light] #pg-dash .topbar,[data-theme=azure] #pg-dash .topbar,[data-theme=midnight] #pg-dash .topbar,[data-theme=fresh] #pg-dash .topbar{background:linear-gradient(to bottom,var(--bg) 75%,transparent)}
-[data-theme=light] #pg-dash .topbar .tb-title,[data-theme=azure] #pg-dash .topbar .tb-title,[data-theme=midnight] #pg-dash .topbar .tb-title,[data-theme=fresh] #pg-dash .topbar .tb-title{color:var(--text)!important}
-[data-theme=light] #pg-dash .topbar .tb-sub,[data-theme=azure] #pg-dash .topbar .tb-sub,[data-theme=midnight] #pg-dash .topbar .tb-sub,[data-theme=fresh] #pg-dash .topbar .tb-sub{color:var(--t2)!important}
-[data-theme=light] #pg-dash .topbar .btn-g,[data-theme=azure] #pg-dash .topbar .btn-g,[data-theme=midnight] #pg-dash .topbar .btn-g,[data-theme=fresh] #pg-dash .topbar .btn-g{color:var(--text)!important;border-color:var(--b1)!important;background:var(--s1)!important}
-[data-theme=light] #pg-dash .topbar .btn-s,[data-theme=azure] #pg-dash .topbar .btn-s,[data-theme=midnight] #pg-dash .topbar .btn-s,[data-theme=fresh] #pg-dash .topbar .btn-s{background:var(--s1)!important;border-color:var(--b1)!important;color:var(--text)!important}
-[data-theme=light] #pg-dash .topbar .pulse,[data-theme=azure] #pg-dash .topbar .pulse,[data-theme=midnight] #pg-dash .topbar .pulse,[data-theme=fresh] #pg-dash .topbar .pulse{border-color:var(--b1)!important}
+/* Без фото — topbar использует переменные темы (только устаревшие темы) */
+[data-theme=azure] #pg-dash .topbar,[data-theme=midnight] #pg-dash .topbar,[data-theme=fresh] #pg-dash .topbar{background:linear-gradient(to bottom,var(--bg) 75%,transparent)}
+[data-theme=azure] #pg-dash .topbar .tb-title,[data-theme=midnight] #pg-dash .topbar .tb-title,[data-theme=fresh] #pg-dash .topbar .tb-title{color:var(--text)!important}
+[data-theme=azure] #pg-dash .topbar .tb-sub,[data-theme=midnight] #pg-dash .topbar .tb-sub,[data-theme=fresh] #pg-dash .topbar .tb-sub{color:var(--t2)!important}
+[data-theme=azure] #pg-dash .topbar .btn-g,[data-theme=midnight] #pg-dash .topbar .btn-g,[data-theme=fresh] #pg-dash .topbar .btn-g{color:var(--text)!important;border-color:var(--b1)!important;background:var(--s1)!important}
+[data-theme=azure] #pg-dash .topbar .btn-s,[data-theme=midnight] #pg-dash .topbar .btn-s,[data-theme=fresh] #pg-dash .topbar .btn-s{background:var(--s1)!important;border-color:var(--b1)!important;color:var(--text)!important}
+[data-theme=azure] #pg-dash .topbar .pulse,[data-theme=midnight] #pg-dash .topbar .pulse,[data-theme=fresh] #pg-dash .topbar .pulse{border-color:var(--b1)!important}
 #pg-dash .scr{position:relative;z-index:1}
 /* Hero card: тёмная тема — стекло поверх фото */
 #pg-dash .hero{background:rgba(0,0,0,0.28);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-color:rgba(255,255,255,0.12);color:#fff!important}
