@@ -894,8 +894,26 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
     <div class="mdl-title">Пополнить кассу</div>
     <button class="btn btn-g btn-sm btn-ic" onclick="closeModal('m-add-cash')"><i data-lucide="x" style="width:15px;height:15px"></i></button>
   </div>
-  <div class="iw"><label class="il">Кто вносит?</label><div id="ac-contributor" style="display:flex;gap:7px;flex-wrap:wrap"></div></div>
-  <div class="iw"><label class="il">Сумма, €</label><input class="inp" id="ac-amt" type="number" placeholder="0,00" min="0" step="0.01"></div>
+  <!-- Тоггл режима -->
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--b1);margin-bottom:8px">
+    <div style="font-size:0.85rem;color:var(--t2)">Разделить на всех поровну</div>
+    <button id="ac-split-btn" onclick="toggleCashSplit()" style="width:46px;height:26px;border-radius:13px;border:none;cursor:pointer;position:relative;transition:background 0.2s;flex-shrink:0;background:var(--b1)">
+      <span id="ac-split-knob" style="position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,0.3);transition:left 0.2s"></span>
+    </button>
+  </div>
+  <!-- Одиночный режим -->
+  <div id="ac-single-mode">
+    <div class="iw"><label class="il">Кто вносит?</label><div id="ac-contributor" style="display:flex;gap:7px;flex-wrap:wrap"></div></div>
+    <div class="iw"><label class="il">Сумма, €</label><input class="inp" id="ac-amt" type="number" placeholder="0,00" min="0" step="0.01"></div>
+  </div>
+  <!-- Режим деления на всех -->
+  <div id="ac-split-mode" style="display:none">
+    <div class="iw">
+      <label class="il">Общая сумма, €</label>
+      <input class="inp" id="ac-total-amt" type="number" placeholder="0,00" min="0" step="0.01" oninput="updateSplitPreview()">
+    </div>
+    <div id="ac-split-preview" style="font-size:0.82rem;color:var(--t2);padding:6px 0;min-height:20px"></div>
+  </div>
   <button class="btn btn-p btn-fw" onclick="saveCash()"><i data-lucide="wallet" style="width:14px;height:14px"></i> Пополнить</button>
 </div></div>
 
@@ -2570,8 +2588,16 @@ function renderTreasury(){
     :'<div class="emp" style="padding:24px"><div class="emp-ic">💳</div><div class="emp-t">Нет списаний</div></div>';
   initializeIcons()
 }
+let _cashSplitMode=false;
 function openAddCash(){
+  _cashSplitMode=false;
   document.getElementById('ac-amt').value='';
+  document.getElementById('ac-total-amt').value='';
+  document.getElementById('ac-split-preview').textContent='';
+  document.getElementById('ac-single-mode').style.display='';
+  document.getElementById('ac-split-mode').style.display='none';
+  document.getElementById('ac-split-btn').style.background='var(--b1)';
+  document.getElementById('ac-split-knob').style.left='3px';
   const el=document.getElementById('ac-contributor');
   if(el){
     el.innerHTML=S.members.map(m=>
@@ -2582,20 +2608,55 @@ function openAddCash(){
   }
   openModal('m-add-cash');initializeIcons()
 }
+function toggleCashSplit(){
+  _cashSplitMode=!_cashSplitMode;
+  document.getElementById('ac-split-btn').style.background=_cashSplitMode?'var(--accent)':'var(--b1)';
+  document.getElementById('ac-split-knob').style.left=_cashSplitMode?'23px':'3px';
+  document.getElementById('ac-single-mode').style.display=_cashSplitMode?'none':'';
+  document.getElementById('ac-split-mode').style.display=_cashSplitMode?'':'none';
+  if(_cashSplitMode)updateSplitPreview();
+}
+function updateSplitPreview(){
+  const total=parseFloat(document.getElementById('ac-total-amt').value)||0;
+  const n=S.members.length;
+  const prev=document.getElementById('ac-split-preview');
+  if(!prev)return;
+  if(total>0&&n>0){
+    const per=total/n;
+    prev.innerHTML=`= <b>${fm(per)} €</b> × ${n} участников`;
+  } else {
+    prev.textContent='';
+  }
+}
 function selContributor(el){
   document.querySelectorAll('[data-contributor]').forEach(b=>b.classList.remove('on'));
   el.classList.add('on');
 }
 function saveCash(){
-  const a=parseFloat(document.getElementById('ac-amt').value);
-  if(!a||a<=0){toast('⚠️ Введите сумму');return}
-  const cEl=document.querySelector('[data-contributor].on');
-  const contributor=cEl?cEl.dataset.contributor:S.me;
   if(!S.treasury.contributions)S.treasury.contributions=[];
-  S.treasury.contributions.push({member:contributor,amount:a,date:today()});
-  S.treasury.total+=a;
-  save();closeModal('m-add-cash');renderTreasury();renderDash();renderAEModal();
-  toast('✅ '+contributor+' внёс '+fm(a)+' € в кассу')
+  if(_cashSplitMode){
+    // Режим деления на всех
+    const total=parseFloat(document.getElementById('ac-total-amt').value);
+    if(!total||total<=0){toast('⚠️ Введите сумму');return}
+    const n=S.members.length;
+    const per=Math.round((total/n)*100)/100;
+    S.members.forEach(m=>{
+      S.treasury.contributions.push({member:m.name,amount:per,date:today()});
+      S.treasury.total+=per;
+    });
+    save();closeModal('m-add-cash');renderTreasury();renderDash();renderAEModal();
+    toast(`✅ ${fm(total)} € разделено поровну (${fm(per)} € × ${n})`);
+  } else {
+    // Одиночный режим
+    const a=parseFloat(document.getElementById('ac-amt').value);
+    if(!a||a<=0){toast('⚠️ Введите сумму');return}
+    const cEl=document.querySelector('[data-contributor].on');
+    const contributor=cEl?cEl.dataset.contributor:S.me;
+    S.treasury.contributions.push({member:contributor,amount:a,date:today()});
+    S.treasury.total+=a;
+    save();closeModal('m-add-cash');renderTreasury();renderDash();renderAEModal();
+    toast('✅ '+contributor+' внёс '+fm(a)+' € в кассу');
+  }
 }
 function toggleContribList(){
   const det=document.getElementById('cash-contrib-detail');
