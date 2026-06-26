@@ -3171,14 +3171,27 @@ async function deleteTrip(){
     try{
       const sb=await getSupabase();
       if(sb){
+        let deleted=false;
         if(S.inviteToken&&S.adminToken){
-          // Новый безопасный путь: RPC с проверкой admin_token
-          await sb.rpc('admin_delete_trip',{
+          // Путь 1: полная проверка invite + admin_token (самый безопасный)
+          const r=await sb.rpc('admin_delete_trip',{
             p_invite_token:S.inviteToken,
             p_admin_token:S.adminToken
           });
-        } else {
-          // Legacy: прямое удаление (старые поездки без токенов)
+          if(!r.error)deleted=true;
+          else console.warn('[SB] admin_delete_trip error:',r.error);
+        }
+        if(!deleted&&S.inviteToken&&S.me){
+          // Путь 2: fallback — invite_token + имя admin-участника (после переустановки)
+          const r=await sb.rpc('admin_delete_trip_by_member',{
+            p_invite_token:S.inviteToken,
+            p_member_name:S.me
+          });
+          if(!r.error)deleted=true;
+          else console.warn('[SB] admin_delete_trip_by_member error:',r.error);
+        }
+        if(!deleted){
+          // Путь 3: legacy (старые поездки без trip_tokens)
           await sb.from('trips').delete().eq('id',tid);
         }
       }
