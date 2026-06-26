@@ -4616,7 +4616,8 @@ function init(){
         if(USE_SUPABASE){
           const me=S.me,savedAdmin=S.isAdmin,myReceipts=S.receipts||[];
           const savedInvite=S.inviteToken,savedAdmin2=S.adminToken;
-          loadFromSupabase(S.trip.id).then(ok=>{
+          const _initTripId=S.trip.id;
+          loadFromSupabase(_initTripId).then(ok=>{
             if(ok){
               S.me=me;
               S.meGender=S.members.find(m=>m.name===me)?.gender||'m';
@@ -4625,6 +4626,16 @@ function init(){
               S.adminToken=savedAdmin2;
               if(!S.receipts||!S.receipts.length)S.receipts=myReceipts;
               renderAll();
+            } else {
+              // Поездка удалена в Supabase — чистим кэш и уходим на онбординг
+              localStorage.removeItem('sw_'+_initTripId);
+              localStorage.removeItem('sw_invite_'+_initTripId);
+              localStorage.removeItem('sw_admin_'+_initTripId);
+              localStorage.removeItem('sw_last');
+              S.trip=null;
+              stopRealtime?.();
+              toast('⚠️ Поездка была удалена администратором');
+              setTimeout(()=>{ location.reload(); },1500);
             }
           }).catch(()=>{});
         }
