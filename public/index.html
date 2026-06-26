@@ -251,7 +251,7 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
 [data-theme=azure] #pg-dash .topbar .pulse,[data-theme=midnight] #pg-dash .topbar .pulse,[data-theme=fresh] #pg-dash .topbar .pulse{border-color:var(--b1)!important}
 #pg-dash .scr{position:relative;z-index:1}
 /* Hero card: тёмная тема — стекло поверх фото */
-#pg-dash .hero{background:rgba(0,0,0,0.15);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);border-color:rgba(255,255,255,0.10);color:#fff!important}
+#pg-dash .hero{background:rgba(0,0,0,0.18);border-color:rgba(255,255,255,0.10);color:#fff!important}
 #pg-dash .hero::before{display:none}
 #pg-dash .hero *{color:#fff!important}
 /* Hero card: светлая тема — использует цвета темы */
@@ -1678,7 +1678,10 @@ function showExpDetail(id){
         ${e.date?`<div style="font-size:0.76rem;color:var(--t2)">${fdate(e.date)}</div>`:''}
         ${e.comment?`<div style="font-size:0.8rem;color:var(--amber);margin-top:2px">💬 ${escHtml(e.comment)}</div>`:''}
       </div>
-      <button class="btn btn-g btn-sm btn-ic" onclick="closeModal('m-exp-detail')"><i data-lucide="x" style="width:15px;height:15px"></i></button>
+      <div style="display:flex;gap:6px;align-items:center">
+        ${canEdit?`<button class="btn btn-g btn-sm btn-ic" data-action="open-exp-edit" data-exp-id="${e.id}"><i data-lucide="pencil" style="width:13px;height:13px"></i></button>`:''}
+        <button class="btn btn-g btn-sm btn-ic" onclick="closeModal('m-exp-detail')"><i data-lucide="x" style="width:15px;height:15px"></i></button>
+      </div>
     </div>
     <div class="hero" style="padding:18px;text-align:left;margin-bottom:14px">
       <div style="font-size:1.9rem;font-weight:700;font-family:var(--mono)">${fm(e.amount)} <span style="font-size:0.9rem;color:var(--t2)">EUR</span></div>
@@ -1720,7 +1723,50 @@ function showExpDetail(id){
     </div>`:''}
     ${canEdit?`<button class="btn btn-d btn-fw" onclick="delExp('${e.id}')"><i data-lucide="trash-2" style="width:13px;height:13px"></i> Удалить расход</button>`:''}
   `;
-  openModal('m-exp-detail');initializeIcons()
+  openModal('m-exp-detail');initializeIcons();
+  // Event delegation для кнопки редактирования
+  const cont=document.getElementById('m-exp-detail-content');
+  cont.onclick=ev=>{
+    const btn=ev.target.closest('[data-action="open-exp-edit"]');
+    if(btn)openExpEdit(btn.dataset.expId);
+  };
+}
+
+function openExpEdit(id){
+  const e=S.expenses.find(x=>x.id===id);if(!e)return;
+  document.getElementById('m-exp-detail-content').innerHTML=`
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <div class="mdl-title" style="font-size:1rem">✏️ Редактировать</div>
+      <button class="btn btn-g btn-sm btn-ic" onclick="showExpDetail('${e.id}')"><i data-lucide="x" style="width:15px;height:15px"></i></button>
+    </div>
+    <div class="iw"><label class="il">Название</label>
+      <input class="inp" id="ed-name" value="${escHtml(e.name)}">
+    </div>
+    <div class="iw"><label class="il">Сумма, €</label>
+      <input class="inp" id="ed-amount" type="number" min="0" step="0.01" value="${e.amount}">
+    </div>
+    <div class="iw"><label class="il">Комментарий (необязательно)</label>
+      <input class="inp" id="ed-comment" value="${escHtml(e.comment||'')}">
+    </div>
+    <div style="display:flex;gap:8px;margin-top:4px">
+      <button class="btn btn-g btn-fw" onclick="showExpDetail('${e.id}')">Отмена</button>
+      <button class="btn btn-p btn-fw" onclick="saveExpEdit('${e.id}')"><i data-lucide="check" style="width:14px;height:14px"></i> Сохранить</button>
+    </div>
+  `;
+  initializeIcons();
+}
+
+function saveExpEdit(id){
+  const e=S.expenses.find(x=>x.id===id);if(!e)return;
+  const name=document.getElementById('ed-name').value.trim();
+  const amount=parseFloat(document.getElementById('ed-amount').value);
+  const comment=document.getElementById('ed-comment').value.trim();
+  if(!name){toast('⚠️ Введите название');return;}
+  if(!amount||amount<=0){toast('⚠️ Введите сумму');return;}
+  if(e.fromTreasury&&e.amount!==amount)S.treasury.spent=S.treasury.spent-e.amount+amount;
+  e.name=name;e.amount=amount;e.comment=comment;
+  save();renderAll();showExpDetail(id);
+  toast('✅ Расход обновлён');
 }
 
 function delExp(id){
@@ -4504,29 +4550,15 @@ async function performRemoteRefresh(reason){
   }
 }
 
-// Banner: данные обновились, но UI был занят
+// Тихое RT-обновление без визуального баннера
 function showRTBanner(){
-  if(document.getElementById('rt-update-banner'))return;
-  const b=document.createElement('div');
-  b.id='rt-update-banner';
-  b.style.cssText='position:fixed;bottom:72px;left:50%;transform:translateX(-50%);'+
-    'background:var(--card);border:1px solid var(--b1);border-radius:10px;'+
-    'padding:10px 14px;display:flex;align-items:center;gap:10px;z-index:9999;'+
-    'box-shadow:0 4px 16px rgba(0,0,0,0.15);font-size:0.82rem;max-width:300px;white-space:nowrap';
-  b.innerHTML='<span style="flex:1;overflow:hidden;text-overflow:ellipsis">Данные обновились</span>'+
-    '<button onclick="applyRTUpdate()" style="background:var(--green);color:#fff;border:none;'+
-    'border-radius:6px;padding:4px 10px;cursor:pointer;font-size:0.8rem;white-space:nowrap">Обновить</button>'+
-    '<button onclick="hideRTBanner()" style="background:none;border:none;cursor:pointer;'+
-    'color:var(--t2);font-size:1rem;line-height:1;padding:0 2px">✕</button>';
-  document.body.appendChild(b);
+  if(document.getElementById('rt-pending-flag'))return;
+  const f=document.createElement('span');f.id='rt-pending-flag';f.style.display='none';
+  document.body.appendChild(f);
+  setTimeout(()=>{f.remove();if(!hasProtectedActiveUi())renderAll();},800);
 }
-function hideRTBanner(){
-  const b=document.getElementById('rt-update-banner');if(b)b.remove();
-}
-function applyRTUpdate(){
-  hideRTBanner();
-  if(!hasProtectedActiveUi())renderAll();
-}
+function hideRTBanner(){const b=document.getElementById('rt-update-banner');if(b)b.remove();}
+function applyRTUpdate(){hideRTBanner();if(!hasProtectedActiveUi())renderAll();}
 
 // Запускает один queued refresh с debounce (вызывается из sbSync, performRemoteRefresh, onProtectedUiFinished)
 function scheduleQueuedRemoteRefresh(reason){
