@@ -255,11 +255,11 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
 #pg-dash .hero::before{display:none}
 #pg-dash .hero *{color:#fff!important}
 /* Hero card: светлая тема — использует цвета темы */
-[data-theme=light] #pg-dash .hero{background:rgba(255,255,255,0.22);border-color:rgba(255,255,255,0.28);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);color:var(--text)!important}
+[data-theme=light] #pg-dash .hero{background:rgba(255,255,255,0.22);border-color:rgba(255,255,255,0.28);color:var(--text)!important}
 [data-theme=light] #pg-dash .hero *{color:var(--text)!important}
 [data-theme=azure] #pg-dash .hero,[data-theme=fresh] #pg-dash .hero{background:rgba(255,255,255,0.22);border-color:rgba(255,255,255,0.28);color:var(--text)!important}
 [data-theme=azure] #pg-dash .hero *,[data-theme=fresh] #pg-dash .hero *{color:var(--text)!important}
-@media(prefers-color-scheme:light){:root:not([data-theme=dark]):not([data-theme=midnight]) #pg-dash .hero{background:rgba(255,255,255,0.22);border-color:rgba(255,255,255,0.28);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);color:var(--text)!important}:root:not([data-theme=dark]):not([data-theme=midnight]) #pg-dash .hero *{color:var(--text)!important}}
+@media(prefers-color-scheme:light){:root:not([data-theme=dark]):not([data-theme=midnight]) #pg-dash .hero{background:rgba(255,255,255,0.22);border-color:rgba(255,255,255,0.28);color:var(--text)!important}:root:not([data-theme=dark]):not([data-theme=midnight]) #pg-dash .hero *{color:var(--text)!important}}
 
 /* DEBT ROW */
 .dr{display:flex;align-items:center;gap:11px;padding:13px 15px;background:var(--s1);border:1px solid var(--b1);border-radius:var(--rsm)}
@@ -729,15 +729,15 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
       <div class="sec" id="sec-couple-mode" style="display:none">
         <div class="sec-hd"><span class="sec-ttl">Расчёт для пары</span></div>
         <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;gap:12px">
-          <div style="flex:1">
-            <div style="font-size:0.88rem;font-weight:600;color:var(--text)" id="couple-mode-label">Считать вместе</div>
-            <div style="font-size:0.78rem;color:var(--t2);margin-top:2px" id="couple-mode-desc">Один платит за двоих</div>
-          </div>
+          <div style="font-size:0.88rem;font-weight:600;color:var(--text)">Считать вместе</div>
           <button id="couple-mode-btn" onclick="toggleCoupleMode()" style="width:46px;height:26px;border-radius:13px;border:none;cursor:pointer;position:relative;transition:background 0.2s;flex-shrink:0">
             <span style="position:absolute;top:3px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,0.3);transition:left 0.2s" id="couple-mode-knob"></span>
           </button>
         </div>
-        <div style="font-size:0.75rem;color:var(--t3);padding:4px 0 2px" id="couple-mode-example"></div>
+        <div id="couple-rep-picker" style="display:none;flex-direction:column;gap:6px;padding:6px 0 4px">
+          <div style="font-size:0.78rem;color:var(--t2)">На чьё имя считать расходы пары?</div>
+          <div id="couple-rep-chips" style="display:flex;gap:7px;flex-wrap:wrap"></div>
+        </div>
       </div>
       <!-- Danger zone -->
       <div class="sec">
@@ -1382,8 +1382,9 @@ function renderDash(){
   let myOwe,myOwed;
   if(coupleMode){
     const groupedDebts=buildGroupedDebts(rawDebts);
-    myOwe=groupedDebts.filter(d=>d.fromInfo.key===myKey);
-    myOwed=groupedDebts.filter(d=>d.toInfo.key===myKey);
+    const rep=getCoupleRep();
+    myOwe=groupedDebts.filter(d=>d.fromInfo.key===myKey).map(d=>({...d,fromInfo:{key:rep,isGroup:false,members:[rep]}}));
+    myOwed=groupedDebts.filter(d=>d.toInfo.key===myKey).map(d=>({...d,toInfo:{key:rep,isGroup:false,members:[rep]}}));
   } else if(myGrp){
     // "Считать отдельно": берём суммарный долг пары и делим на кол-во участников
     const groupedDebts=buildGroupedDebts(rawDebts);
@@ -4190,25 +4191,25 @@ function toggleTheme(){
   setTheme(cur==='dark'?'light':'dark');
 }
 function isCoupleMode(){return localStorage.getItem('sw_couple_mode')!=='0'}
+function getCoupleRep(){return localStorage.getItem('sw_couple_rep')||S.me}
+function setCoupleRep(name){
+  localStorage.setItem('sw_couple_rep',name);
+  updateCoupleModeBtn();renderHome();
+}
 function updateCoupleModeBtn(){
   const on=isCoupleMode();
   const btn=document.getElementById('couple-mode-btn');
   const knob=document.getElementById('couple-mode-knob');
-  const label=document.getElementById('couple-mode-label');
-  const desc=document.getElementById('couple-mode-desc');
-  const ex=document.getElementById('couple-mode-example');
+  const picker=document.getElementById('couple-rep-picker');
+  const chipsEl=document.getElementById('couple-rep-chips');
   if(btn)btn.style.background=on?'var(--accent)':'var(--b1)';
   if(knob)knob.style.left=on?'23px':'3px';
-  const myGrp=groupOf(S.me);
-  const partner=myGrp?myGrp.members.filter(n=>n!==S.me).join(' и '):'партнёр';
-  if(on){
-    if(label)label.textContent='Считать вместе';
-    if(desc)desc.textContent=S.me+' платит за двоих ('+partner+')';
-    if(ex)ex.textContent='Пример: Андрей заплатил 20€ на 4 чел. → '+S.me+' должен 10€ (за вас двоих)';
-  } else {
-    if(label)label.textContent='Считать отдельно';
-    if(desc)desc.textContent='Каждый платит свою долю';
-    if(ex)ex.textContent='Пример: Андрей заплатил 20€ на 4 чел. → '+S.me+' должен 5€, '+partner+' должен 5€';
+  if(picker)picker.style.display=on?'flex':'none';
+  if(on&&chipsEl){
+    const myGrp=groupOf(S.me);
+    const members=myGrp?myGrp.members:[S.me];
+    const rep=getCoupleRep();
+    chipsEl.innerHTML=members.map(m=>`<div class="wp${m===rep?' on':''}" data-action="set-couple-rep" data-rep-name="${escHtml(m)}" style="cursor:pointer">${escHtml(m)}</div>`).join('');
   }
 }
 function toggleCoupleMode(){
@@ -4216,6 +4217,11 @@ function toggleCoupleMode(){
   updateCoupleModeBtn();
   renderHome();
 }
+// event delegation for representative picker
+document.addEventListener('click',function(e){
+  const chip=e.target.closest('[data-action="set-couple-rep"]');
+  if(chip)setCoupleRep(chip.dataset.repName);
+});
 
 // =======================================================
 // STORAGE — localStorage (fallback) + Supabase (primary)
