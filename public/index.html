@@ -251,7 +251,7 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
 [data-theme=azure] #pg-dash .topbar .pulse,[data-theme=midnight] #pg-dash .topbar .pulse,[data-theme=fresh] #pg-dash .topbar .pulse{border-color:var(--b1)!important}
 #pg-dash .scr{position:relative;z-index:1}
 /* Hero card: тёмная тема — стекло поверх фото */
-#pg-dash .hero{background:rgba(0,0,0,0.28);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-color:rgba(255,255,255,0.12);color:#fff!important}
+#pg-dash .hero{background:rgba(0,0,0,0.15);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);border-color:rgba(255,255,255,0.10);color:#fff!important}
 #pg-dash .hero::before{display:none}
 #pg-dash .hero *{color:#fff!important}
 /* Hero card: светлая тема — использует цвета темы */
@@ -1702,7 +1702,7 @@ function showExpDetail(id){
           const u=units(p);const sh=ps*u;
           return `<div style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--s1);border-radius:var(--rsm)">
             <div class="av av-sm" style="background:${ac(p)}">${escHtml(p[0]||'?')}</div>
-            <div style="flex:1;font-size:0.86rem;color:${ac(p)};font-weight:500">${escHtml(p)}${u>1?`<span style="color:var(--t3);font-size:0.71rem;font-weight:400"> ×${u}</span>`:''}</div>
+            <div style="flex:1;font-size:0.86rem;color:${ac(p)};font-weight:500">${escHtml(p)}</div>
             <div style="font-family:var(--mono);font-size:0.86rem">${fm(sh)} €</div>
           </div>`
         }).join('')}`}
@@ -1763,7 +1763,6 @@ function renderAEParticipants(){
       <input type="checkbox" class="ae-check" value="${escHtml(m.name)}" style="accent-color:var(--accent);width:15px;height:15px" onchange="renderAEPairOptions()">
       <div class="av av-sm" style="background:${ac(m.name)}">${escHtml(m.name[0]||'?')}</div>
       <span style="font-size:0.86rem;flex:1;color:${ac(m.name)};font-weight:500">${escHtml(m.name)}</span>
-      ${u>1?`<span class="bdg bdg-r" style="font-size:0.66rem">×${u}</span>`:''}
     </label>`;
   }).join('');
   renderAEPairOptions();
