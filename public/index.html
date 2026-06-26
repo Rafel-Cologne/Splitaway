@@ -255,11 +255,11 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
 #pg-dash .hero::before{display:none}
 #pg-dash .hero *{color:#fff!important}
 /* Hero card: светлая тема — использует цвета темы */
-[data-theme=light] #pg-dash .hero{background:rgba(255,255,255,0.82);border-color:rgba(0,0,0,0.11);color:var(--text)!important}
+[data-theme=light] #pg-dash .hero{background:rgba(255,255,255,0.45);border-color:rgba(255,255,255,0.55);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);color:var(--text)!important}
 [data-theme=light] #pg-dash .hero *{color:var(--text)!important}
-[data-theme=azure] #pg-dash .hero,[data-theme=fresh] #pg-dash .hero{background:rgba(255,255,255,0.75);border-color:rgba(0,0,0,0.11);color:var(--text)!important}
+[data-theme=azure] #pg-dash .hero,[data-theme=fresh] #pg-dash .hero{background:rgba(255,255,255,0.45);border-color:rgba(255,255,255,0.55);color:var(--text)!important}
 [data-theme=azure] #pg-dash .hero *,[data-theme=fresh] #pg-dash .hero *{color:var(--text)!important}
-@media(prefers-color-scheme:light){:root:not([data-theme=dark]):not([data-theme=midnight]) #pg-dash .hero{background:rgba(255,255,255,0.82);border-color:rgba(0,0,0,0.11);color:var(--text)!important}:root:not([data-theme=dark]):not([data-theme=midnight]) #pg-dash .hero *{color:var(--text)!important}}
+@media(prefers-color-scheme:light){:root:not([data-theme=dark]):not([data-theme=midnight]) #pg-dash .hero{background:rgba(255,255,255,0.45);border-color:rgba(255,255,255,0.55);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);color:var(--text)!important}:root:not([data-theme=dark]):not([data-theme=midnight]) #pg-dash .hero *{color:var(--text)!important}}
 
 /* DEBT ROW */
 .dr{display:flex;align-items:center;gap:11px;padding:13px 15px;background:var(--s1);border:1px solid var(--b1);border-radius:var(--rsm)}
