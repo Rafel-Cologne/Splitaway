@@ -456,7 +456,7 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
       <div style="display:flex;align-items:center;gap:8px">
         <div class="pulse" id="rt-indicator" title="Онлайн"></div>
         <button class="btn btn-g btn-sm btn-ic" id="push-btn" onclick="togglePush()" title="Уведомления"><i data-lucide="bell" style="width:15px;height:15px"></i></button>
-        <button class="btn btn-s btn-sm" onclick="openQR()" style="gap:5px"><i data-lucide="qr-code" style="width:13px;height:13px"></i> QR</button>
+        <button class="btn btn-s btn-sm" id="qr-btn" onclick="openQR()" style="gap:5px"><i data-lucide="qr-code" style="width:13px;height:13px"></i> QR</button>
         <button class="btn btn-g btn-sm btn-ic" onclick="toggleTheme()"><i data-lucide="sun-moon" style="width:15px;height:15px"></i></button>
       </div>
     </div>
@@ -514,7 +514,7 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
 
   <!-- TREASURY -->
   <div class="page" id="pg-cash">
-    <div class="topbar"><div class="tb-title">Касса</div><div style="display:flex;gap:7px"><button id="cash-edit-btn" class="btn btn-g btn-sm btn-ic" onclick="openEditCashList()" style="display:none"><i data-lucide="pencil" style="width:13px;height:13px"></i></button><button class="btn btn-s btn-sm" onclick="openAddCash()"><i data-lucide="plus" style="width:13px;height:13px"></i> Пополнить</button></div></div>
+    <div class="topbar"><div class="tb-title">Касса</div><div style="display:flex;gap:7px"><button id="cash-edit-btn" class="btn btn-g btn-sm btn-ic" onclick="openEditCashList()" style="display:none"><i data-lucide="pencil" style="width:13px;height:13px"></i></button><button class="btn btn-s btn-sm" id="cash-add-btn" onclick="openAddCash()"><i data-lucide="plus" style="width:13px;height:13px"></i> Пополнить</button></div></div>
     <div class="scr" style="gap:18px">
       <div style="padding:0 18px">
         <div class="th">
@@ -673,6 +673,10 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
   <div class="page" id="pg-set">
     <div class="topbar"><div class="tb-title">Настройки</div></div>
     <div class="scr" style="gap:18px">
+      <!-- Role display -->
+      <div class="sec" id="set-role-sec">
+        <div id="set-role-display"></div>
+      </div>
       <!-- Trip info -->
       <div class="sec">
         <div class="sec-hd"><span class="sec-ttl">Поездка</span></div>
@@ -1033,6 +1037,9 @@ const S = {
 };
 // Проверка: является ли участник администратором (учитывает и основного, и сo-admins)
 function isAdm(name){return name===S.adminName||(S.coAdmins||[]).includes(name);}
+// isTripAdmin: true только если S.isAdmin И admin-token есть в localStorage.
+// Защищает от подмены S.isAdmin в памяти — участник не получит токен.
+function isTripAdmin(){return Boolean(S.isAdmin===true&&localStorage.getItem('sw_admin_'+(S.trip?.id)));}
 
 let CT = {members:[]};
 let _sbSyncing  = false;
@@ -1443,6 +1450,8 @@ function renderDash(){
     :'<div class="emp" style="padding:14px"><div class="emp-ic">🧾</div><div class="emp-t">Нет расходов</div></div>';
 
   renderMembersList();
+  const qrBtn=document.getElementById('qr-btn');
+  if(qrBtn)qrBtn.style.display=isTripAdmin()?'':'none';
   initializeIcons()
 }
 function toggleMyBal(){
@@ -1671,7 +1680,7 @@ function toggleExpGroup(gid){
 function showExpDetail(id){
   const e=S.expenses.find(x=>x.id===id);if(!e)return;
   const ps=perShare(e);
-  const canEdit=S.isAdmin;
+  const canEdit=isTripAdmin();
   document.getElementById('m-exp-detail-content').innerHTML=`
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px">
       <div>
@@ -1771,7 +1780,7 @@ function saveExpEdit(id){
 }
 
 function delExp(id){
-  if(!S.isAdmin){toast('❌ Только Админ');return}
+  if(!isTripAdmin()){toast('❌ Только Админ');return}
   const e=S.expenses.find(x=>x.id===id);
   if(e&&e.fromTreasury)S.treasury.spent-=e.amount;
   S.expenses=S.expenses.filter(x=>x.id!==id);
@@ -2053,7 +2062,7 @@ function renderGroupedDebtRow(gd,numbered){
   const rowAction=isGroupDebt?'show-group-debt':'show-individual-debt';
 
   // Кнопка погашения показывается только в режиме без нумерации (вкладка Долги).
-  const settleBtn=numbered===undefined
+  const settleBtn=(numbered===undefined&&isTripAdmin())
     ?`<button class="btn btn-green btn-sm" data-action="settle-debt" data-debt-id="${debtId}" title="Отметить как погашен" style="padding:5px 10px;font-size:0.75rem">✓</button>`
     :'';
 
@@ -2096,7 +2105,7 @@ function showGroupDebtDetail(fromInfo,toInfo,amount){
     <div class="da neg">${fm(d.amount)} €</div>
   </div>`).join('')}
   <div id="m-debt-settle-error" style="display:none;color:var(--red);font-size:0.82rem;background:rgba(220,38,38,0.08);border:1px solid rgba(220,38,38,0.25);border-radius:var(--r);padding:9px 12px;margin-top:10px"></div>
-  <button class="btn btn-green btn-fw" style="margin-top:10px" data-action="settle-from-modal"><i data-lucide="check" style="width:15px;height:15px"></i> Погасить всё</button>`;
+  ${isTripAdmin()?'<button class="btn btn-green btn-fw" style="margin-top:10px" data-action="settle-from-modal"><i data-lucide="check" style="width:15px;height:15px"></i> Погасить всё</button>':''}` ;
   document.getElementById('m-debt-detail-content').innerHTML=html;
   openModal('m-debt-detail');initializeIcons();
 }
@@ -2106,6 +2115,7 @@ function showGroupDebtDetail(fromInfo,toInfo,amount){
 // settleBtn — кнопка, которую нажал пользователь (для loading state)
 // isModal   — true если вызов из модала (не закрываем модал до success)
 async function doSettleGroupedDebt(gd, settleBtn, isModal){
+  if(!isTripAdmin()){toast('❌ Только Админ');return}
   if(_settlePending)return; // уже идёт операция — игнорируем
   _settlePending=true;
 
@@ -2292,6 +2302,7 @@ function renderBalances(){
 }
 
 function settleDebt(from, to, amount){
+  if(!isTripAdmin()){toast('❌ Только Админ');return}
   if(!S.settledDebts)S.settledDebts=[];
   S.settledDebts.push({id:uid(),from,to,amount,date:today()});
   save();renderBalances();renderDash();
@@ -2303,14 +2314,14 @@ function unsettle(id){
   toast('↩ Погашение отменено')
 }
 function deleteSettled(id){
-  if(!S.isAdmin){toast('❌ Только Админ');return}
+  if(!isTripAdmin()){toast('❌ Только Админ');return}
   if(!confirm('Удалить запись из архива?'))return;
   S.settledDebts=(S.settledDebts||[]).filter(d=>d.id!==id);
   save();renderBalances();renderDash();
   toast('🗑 Удалено из архива')
 }
 function openEditSettled(id){
-  if(!S.isAdmin){toast('❌ Только Админ');return}
+  if(!isTripAdmin()){toast('❌ Только Админ');return}
   const sd=(S.settledDebts||[]).find(x=>x.id===id);
   if(!sd)return;
   document.getElementById('es-id').value=id;
@@ -2400,10 +2411,10 @@ function renderSettledArchive(settled){
           const hasNote=sd.note;
           // Кнопки: для слитых (grouped) записей — используем первый id; удаление удаляет все
           const editId=sd._ids?sd._ids[0]:sd.id;
-          const adminBtns=S.isAdmin?`
+          const adminBtns=isTripAdmin()?`
             <button class="btn btn-g btn-sm" onclick="openEditSettled('${sd._ids?sd._ids[0]:sd.id}')" title="Редактировать" style="padding:4px 8px;font-size:0.7rem">✏️</button>
             <button class="btn btn-g btn-sm" onclick="${sd._ids?`[${sd._ids.map(x=>"'"+x+"'").join(',')}].forEach(deleteSettledSilent)`:`deleteSettled('${sd.id}')`}" title="Удалить" style="padding:4px 8px;font-size:0.7rem;color:var(--red)">🗑</button>
-          `:'<button class="btn btn-g btn-sm" onclick="unsettle(\''+( sd._ids?sd._ids[0]:sd.id )+'\')" title="Отменить" style="padding:4px 8px;font-size:0.7rem">↩</button>';
+          `:'';
           return `<div style="padding:9px 12px;${i?'border-top:1px solid var(--b1)':''}">
             <div style="display:flex;align-items:center;gap:9px">
               <div class="av av-sm" style="background:${ac(firstAv)}">${escHtml(firstAv[0]||'?')}</div>
@@ -2427,7 +2438,7 @@ function renderSettledArchive(settled){
 }
 // Тихое удаление (для группового погашения — удаляем все id)
 function deleteSettledSilent(id){
-  if(!S.isAdmin)return;
+  if(!isTripAdmin())return;
   S.settledDebts=(S.settledDebts||[]).filter(d=>d.id!==id);
   save();renderBalances();renderDash();
 }
@@ -2573,7 +2584,9 @@ function renderTreasury(){
   const pct=S.treasury.total>0?Math.min(100,(1-rem/S.treasury.total)*100):0;
   document.getElementById('cash-prog').style.width=pct+'%';
   const editBtn=document.getElementById('cash-edit-btn');
-  if(editBtn)editBtn.style.display=S.isAdmin&&(S.treasury.contributions||[]).length?'':'none';
+  if(editBtn)editBtn.style.display=isTripAdmin()&&(S.treasury.contributions||[]).length?'':'none';
+  const cashAddBtn=document.getElementById('cash-add-btn');
+  if(cashAddBtn)cashAddBtn.style.display=isTripAdmin()?'':'none';
 
   // Per-person breakdown
   const stats=calcTreasuryStats();
@@ -2643,7 +2656,7 @@ function renderTreasury(){
     const detEl=document.getElementById('cash-contrib-detail');
     if(detEl){
       detEl.innerHTML=[...contribs].map((c,idx)=>{
-        const canDel=S.isAdmin||(c.member===S.me);
+        const canDel=isTripAdmin();
         return `<div style="display:flex;align-items:center;gap:8px;padding:7px 11px;background:var(--s1);border:1px solid var(--b1);border-radius:var(--rsm);font-size:0.83rem">
           <div class="av av-sm" style="background:${ac(c.member)}">${escHtml(c.member[0]||'?')}</div>
           <div style="flex:1;color:${ac(c.member)};font-weight:500">${escHtml(c.member)}</div>
@@ -2664,6 +2677,7 @@ function renderTreasury(){
 }
 let _cashSplitMode=false;
 function openAddCash(){
+  if(!isTripAdmin()){toast('❌ Только Админ');return}
   _cashSplitMode=false;
   document.getElementById('ac-amt').value='';
   document.getElementById('ac-total-amt').value='';
@@ -2741,6 +2755,7 @@ function toggleContribList(){
   if(chev)chev.style.transform=open?'':'rotate(180deg)';
 }
 function openHolderPicker(){
+  if(!isTripAdmin()){toast('❌ Только Админ');return}
   const current=S.treasury.holder;
   const opts=S.members.map(m=>`<div class="wp ${m.name===current?'on':''}" data-holder="${escHtml(m.name)}" onclick="setHolder(this.dataset.holder,this)" style="cursor:pointer">
     <div class="av av-sm" style="background:${ac(m.name)}">${escHtml(m.name[0]||'?')}</div>
@@ -2975,6 +2990,7 @@ function saveMyOrder(){
 }
 
 function openEditCashList(){
+  if(!isTripAdmin()){toast('❌ Только Админ');return}
   renderEditCashModal();
   openModal('m-edit-cash');initializeIcons();
 }
@@ -2997,6 +3013,7 @@ function renderEditCashModal(){
   initializeIcons();
 }
 function deleteContrib(idx){
+  if(!isTripAdmin()){toast('❌ Только Админ');return}
   if(!confirm('Удалить этот взнос?'))return;
   S.treasury.contributions.splice(idx,1);
   S.treasury.total=S.treasury.contributions.reduce((s,c)=>s+c.amount,0);
@@ -3022,7 +3039,13 @@ function saveEditedContribs(){
 // SETTINGS
 // =======================================================
 function renderSettings(){
-  const isAdminUser=S.isAdmin;
+  const isAdminUser=isTripAdmin();
+  // Role display
+  const roleEl=document.getElementById('set-role-display');
+  if(roleEl){roleEl.innerHTML=isAdminUser
+    ?'<div style="font-size:0.85rem;color:var(--t2)">Роль: <span style="color:var(--ac2);font-weight:700">Администратор</span></div>'
+    :'<div style="font-size:0.85rem;color:var(--t2)">Роль: <span style="font-weight:600">Участник</span></div><div style="font-size:0.8rem;color:var(--t3);margin-top:5px">Пары и семьи настраивает администратор поездки.</div>';
+  }
   document.getElementById('set-trip-form').style.display=isAdminUser?'':'none';
   document.getElementById('set-add-mbr-btn').style.display=isAdminUser?'':'none';
   const grpAdminWrap=document.getElementById('set-grp-admin-wrap');
@@ -3041,10 +3064,10 @@ function renderSettings(){
   if(tBtn)tBtn.innerHTML=isLight
     ?'<i data-lucide="moon" style="width:16px;height:16px"></i> Тёмная тема'
     :'<i data-lucide="sun" style="width:16px;height:16px"></i> Светлая тема';
-  // Show couple-mode toggle only if user is in a couple
+  // Couple-mode toggle — только для Администратора
   const myGrpS=groupOf(S.me);
   const secCM=document.getElementById('sec-couple-mode');
-  if(secCM)secCM.style.display=myGrpS?'':'none';
+  if(secCM)secCM.style.display=(myGrpS&&isAdminUser)?'':'none';
   updateCoupleModeBtn();
   renderSettingMembers();
   renderSettingGroups();
@@ -3094,10 +3117,10 @@ function renderSettingMembers(){
         ${S.groups.find(g=>g.members.includes(m.name))?`<span style="font-size:0.65rem;background:rgba(139,127,212,0.18);color:#8b7fd4;padding:2px 6px;border-radius:4px;font-weight:600;margin-left:5px">${S.groups.find(g=>g.members.includes(m.name)).type==='couple'?'♥ пара':'👨‍👩‍👧 семья'}</span>`:''}
       </div>
       <div style="display:flex;gap:5px">
-        ${(S.isAdmin||m.name===S.me)?`<button class="btn btn-g btn-sm btn-ic" title="Изменить цвет" onclick="openColorPicker(this.closest('[data-mname]').dataset.mname)" style="padding:7px;position:relative">
+        ${(isTripAdmin()||m.name===S.me)?`<button class="btn btn-g btn-sm btn-ic" title="Изменить цвет" onclick="openColorPicker(this.closest('[data-mname]').dataset.mname)" style="padding:7px;position:relative">
           <span style="display:block;width:13px;height:13px;border-radius:50%;background:${ac(m.name)};border:1px solid var(--b2)"></span>
         </button>`:''}
-        ${S.isAdmin?`${m.name!==S.me?`<button class="btn btn-g btn-sm btn-ic" title="${isAdm(m.name)?'Снять права Админа':'Сделать Админом'}"
+        ${isTripAdmin()?`${m.name!==S.me?`<button class="btn btn-g btn-sm btn-ic" title="${isAdm(m.name)?'Снять права Админа':'Сделать Админом'}"
           onclick="toggleMemberAdmin(this.closest('[data-mname]').dataset.mname)" style="${isAdm(m.name)?'color:var(--amber)':''}">
           <i data-lucide="${isAdm(m.name)?'shield-off':'shield-check'}" style="width:13px;height:13px"></i>
         </button>`:''}
@@ -3176,7 +3199,7 @@ function resetColor(name){
 }
 
 function toggleMemberAdmin(name){
-  if(!S.isAdmin){toast('❌ Только Админ');return}
+  if(!isTripAdmin()){toast('❌ Только Админ');return}
   if(name===S.adminName){toast('⚠️ Нельзя снять права с создателя поездки');return}
   if(!S.coAdmins)S.coAdmins=[];
   if(S.coAdmins.includes(name)){
@@ -3216,6 +3239,7 @@ function saveRename(){
 
 function toggleMSel(el,name){el.classList.toggle('checked')}
 function createGroup(){
+  if(!isTripAdmin()){toast('❌ Только Админ');return}
   const checked=[...document.querySelectorAll('.member-sel.checked')].map(el=>el.dataset.ms);
   if(checked.length<2){toast('⚠️ Выберите минимум 2 участников');return}
   // Remove existing groups of these members
@@ -3238,25 +3262,26 @@ function renderSettingGroups(){
         <div style="font-weight:600;font-size:0.86rem">${escHtml(lbl)}</div>
         <div style="font-size:0.75rem;color:var(--t2)">${g.members.map(n=>`<span style="color:${ac(n)}">${escHtml(n)}</span>`).join(' + ')}</div>
       </div>
-      ${S.isAdmin?`<button class="btn btn-g btn-sm btn-ic" onclick="removeGroup('${g.id}')"><i data-lucide="trash-2" style="width:12px;height:12px"></i></button>`:''}
+      ${isTripAdmin()?`<button class="btn btn-g btn-sm btn-ic" onclick="removeGroup('${g.id}')"><i data-lucide="trash-2" style="width:12px;height:12px"></i></button>`:''}
     </div>`
   }).join('')
 }
 
 function removeGroup(gid){
+  if(!isTripAdmin()){toast('❌ Только Админ');return}
   S.groups=S.groups.filter(g=>g.id!==gid);
   save();renderSettings();renderAll();toast('Группа удалена')
 }
 
 function removeMember(name){
-  if(!S.isAdmin){toast('❌ Только Админ');return}
+  if(!isTripAdmin()){toast('❌ Только Админ');return}
   if(!confirm(`Удалить ${name} из поездки?`))return;
   S.members=S.members.filter(m=>m.name!==name);
   S.groups=S.groups.map(g=>({...g,members:g.members.filter(n=>n!==name)})).filter(g=>g.members.length>1);
   save();renderAll();renderSettings()
 }
 
-function openAddMember(){if(!S.isAdmin){toast('❌ Только Админ');return}document.getElementById('am-name').value='';openModal('m-add-mbr')}
+function openAddMember(){if(!isTripAdmin()){toast('❌ Только Админ');return}document.getElementById('am-name').value='';openModal('m-add-mbr')}
 function saveMember(){
   const name=document.getElementById('am-name').value.trim();
   const gender=document.getElementById('am-gender').value;
@@ -3267,7 +3292,7 @@ function saveMember(){
 }
 
 function saveTripSettings(){
-  if(!S.isAdmin){toast('❌ Только Админ');return}
+  if(!isTripAdmin()){toast('❌ Только Админ');return}
   S.trip.name=document.getElementById('set-name').value.trim()||S.trip.name;
   S.trip.dest=document.getElementById('set-dest').value.trim();
   document.getElementById('app-trip-name').textContent=S.trip.name;
@@ -3344,7 +3369,7 @@ function exportTrip(fmt) {
 }
 
 async function deleteTrip(){
-  if(!S.isAdmin){toast('❌ Только Админ');return}
+  if(!isTripAdmin()){toast('❌ Только Админ');return}
   if(!confirm(`Удалить поездку "${S.trip?.name}"? Это действие нельзя отменить.`))return;
   const tid=S.trip.id;
   // Удаляем локальные данные (включая токены)
@@ -3822,7 +3847,7 @@ function showParsed(title,mode){
   document.getElementById('sc-menu-pick').style.display='none';
   // Hint for non-admin
   const hint=document.getElementById('sc-assign-hint');
-  if(hint)hint.style.display=S.isAdmin?'none':'block';
+  if(hint)hint.style.display=isTripAdmin()?'none':'block';
   document.getElementById('sc-exp-date').value=today();
   document.getElementById('sc-exp-name').value='';
   renderScanItems();
@@ -3830,7 +3855,7 @@ function showParsed(title,mode){
 }
 
 function renderScanItems(){
-  const canAdmin=S.isAdmin;
+  const canAdmin=isTripAdmin();
   document.getElementById('sc-items-list').innerHTML=S.scan.items.map((it,i)=>{
     const qty=it.qty||1;
     const unitP=qty>1?it.price/qty:it.price;
@@ -4103,6 +4128,7 @@ function tripURL(){
   return url;
 }
 async function openQR(){
+  if(!isTripAdmin()){toast('❌ Только Админ');return}
   const code=S.trip.id;
   const url=tripURL();
   document.getElementById('qr-code').textContent=code;
@@ -4213,6 +4239,7 @@ function updateCoupleModeBtn(){
   }
 }
 function toggleCoupleMode(){
+  if(!isTripAdmin()){toast('❌ Только Админ');return}
   localStorage.setItem('sw_couple_mode',isCoupleMode()?'0':'1');
   updateCoupleModeBtn();
   renderHome();
