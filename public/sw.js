@@ -7,7 +7,7 @@
 // v3.0: локальный lucide.js, qrcode.min.js; убран CDN-кэш; нет Google Fonts
 // ============================================================
 
-const SW_VERSION   = '4.0';
+const SW_VERSION   = '4.1';
 const CACHE_STATIC = `splitaway-static-${SW_VERSION}`;
 
 // Ресурсы, которые кэшируем при установке (все локальные — нет CDN)
@@ -83,7 +83,14 @@ self.addEventListener('fetch', event => {
                   url.pathname === '/index.html' ||
                   url.pathname.endsWith('/');
 
-  if (isShell || url.pathname.startsWith('/js/')) {
+  // index.html — network-first: всегда свежий код, кэш только офлайн
+  if (isShell) {
+    event.respondWith(networkFirst(event.request, CACHE_STATIC));
+    return;
+  }
+
+  // JS-файлы — stale-while-revalidate (обновляются в фоне)
+  if (url.pathname.startsWith('/js/')) {
     event.respondWith(staleWhileRevalidate(event.request, CACHE_STATIC));
     return;
   }
@@ -98,6 +105,21 @@ self.addEventListener('fetch', event => {
   // 4. Остальные внешние запросы — только сеть (не кэшируем)
   return;
 });
+
+// ---- Стратегия: сеть первая, кэш только при офлайне ----
+async function networkFirst(request, cacheName) {
+  const cache = await caches.open(cacheName);
+  try {
+    const response = await fetch(request);
+    if (response && response.ok) {
+      cache.put(request, response.clone());
+    }
+    return response;
+  } catch {
+    const cached = await cache.match(request);
+    return cached || offlineFallback(request);
+  }
+}
 
 // ---- Стратегия: отдать кэш немедленно + обновить в фоне ----
 async function staleWhileRevalidate(request, cacheName) {

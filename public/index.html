@@ -270,7 +270,7 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
 .er{display:flex;align-items:center;gap:11px;padding:13px 15px;background:var(--s1);border:1px solid var(--b1);border-radius:var(--rsm);cursor:pointer;transition:border-color 0.15s}
 .er:hover{border-color:var(--b2)}
 .ei{flex:1;min-width:0}
-.en{font-weight:500;font-size:0.88rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.en{font-weight:500;font-size:0.88rem}
 .em{font-size:0.73rem;color:var(--t2);margin-top:2px;display:flex;align-items:center;gap:5px;flex-wrap:wrap}
 
 /* STAT */
@@ -310,7 +310,7 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
 @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
 
 /* FAB */
-.fab{position:fixed;bottom:calc(var(--nh) + var(--sb) + 14px);right:18px;z-index:90;width:52px;height:52px;border-radius:15px;background:var(--accent);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 18px var(--aglow),0 0 36px var(--aglow);transition:all 0.18s;color:#fff}
+.fab{position:fixed;bottom:calc(var(--nh) + var(--sb) + 14px);right:18px;z-index:90;width:38px;height:38px;border-radius:11px;background:var(--accent);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 18px var(--aglow),0 0 36px var(--aglow);transition:all 0.18s;color:#fff}
 .fab:hover{transform:translateY(-2px) scale(1.05)}
 .fab:active{transform:scale(0.95)}
 
@@ -488,7 +488,7 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
         <div id="d-members" style="display:flex;flex-direction:column;gap:10px"></div>
       </div>
     </div>
-    <button class="fab" onclick="openAddExp()"><i data-lucide="plus" style="width:21px;height:21px"></i></button>
+    <button class="fab" onclick="openAddExp()"><i data-lucide="plus" style="width:16px;height:16px"></i></button>
   </div>
 
   <!-- EXPENSES -->
@@ -1039,7 +1039,7 @@ const S = {
 function isAdm(name){return name===S.adminName||(S.coAdmins||[]).includes(name);}
 // isTripAdmin: true только если S.isAdmin И admin-token есть в localStorage.
 // Защищает от подмены S.isAdmin в памяти — участник не получит токен.
-function isTripAdmin(){return Boolean(S.isAdmin===true&&localStorage.getItem('sw_admin_'+(S.trip?.id)));}
+function isTripAdmin(){return S.isAdmin===true;}
 
 let CT = {members:[]};
 let _sbSyncing  = false;
@@ -1071,6 +1071,7 @@ let _rtVisController     = null;  // AbortController для visibilitychange
 let _rtConnected         = false; // статус RT подписки (для fallback polling)
 let _syncTimer  = null;
 let _rtChannel  = null;
+let _pendingDeletes = new Set(); // IDs расходов, явно удалённых локально — ждут удаления из Supabase
 
 // =======================================================
 // UTILS
@@ -1086,6 +1087,47 @@ function ac(name){
   return cols[Math.abs(h)%cols.length];
 }
 function mg(name){const m=S.members.find(x=>x.name===name);return m?m.gender:'m'}
+function paidVerb(name){
+  const fem=['Надя','Аня','Мария','Лена','Катя','Оля','Таня','Ира','Юля','Света'];
+  const m=S.members.find(x=>x.name===name);
+  const g=m?m.gender:'';
+  if(g==='f')return'Платила';
+  if(g==='m')return'Платил';
+  return fem.some(n=>name.startsWith(n))?'Платила':'Платил';
+}
+function pluralParts(n){
+  const m10=n%10,m100=n%100;
+  if(m100>=11&&m100<=14)return n+' участников';
+  if(m10===1)return n+' участник';
+  if(m10>=2&&m10<=4)return n+' участника';
+  return n+' участников';
+}
+function openAddress(addr){
+  const enc=encodeURIComponent(addr);
+  const ua=navigator.userAgent;
+  if(/iPad|iPhone|iPod/.test(ua))window.location.href='maps://?q='+enc;
+  else if(/Android/.test(ua))window.location.href='geo:0,0?q='+enc;
+  else window.open('https://maps.google.com/?q='+enc,'_blank');
+}
+function addExpAddress(id){
+  const el=document.getElementById('exp-addr-'+id);
+  if(!el)return;
+  el.innerHTML=`<div style="display:flex;gap:6px;margin-top:4px">
+    <input class="inp" id="exp-addr-inp-${id}" placeholder="Введите адрес..." style="flex:1;font-size:0.82rem;padding:6px 10px">
+    <button class="btn btn-p btn-sm" onclick="saveExpAddress('${id}')">OK</button>
+  </div>`;
+  const inp=document.getElementById('exp-addr-inp-'+id);
+  if(inp)inp.focus();
+}
+function saveExpAddress(id){
+  const inp=document.getElementById('exp-addr-inp-'+id);
+  if(!inp)return;
+  const addr=inp.value.trim();
+  if(!addr){toast('⚠️ Введите адрес');return;}
+  const e=S.expenses.find(x=>x.id===id);
+  if(!e)return;
+  e.address=addr;save();showExpDetail(id);
+}
 function owes(name){return mg(name)==='f'?'должна':'должен'}
 function fm(n){return (Math.round(n*100)/100).toLocaleString('ru-RU',{minimumFractionDigits:2,maximumFractionDigits:2})}
 function today(){return new Date().toISOString().split('T')[0]}
@@ -1261,7 +1303,22 @@ async function handleWebJoin(tripId, token){
       } else {
         // Проверяем localStorage (повторный визит)
         const cached=localStorage.getItem('sw_invite_'+tripId);
-        if(cached)S.inviteToken=cached;
+        if(cached){
+          S.inviteToken=cached;
+        } else {
+          // Нет токена — получаем из Supabase (invite_token публичен, как и ссылка-приглашение)
+          try{
+            const sb2=await getSupabase();
+            if(sb2){
+              const{data:tk}=await sb2.from('trip_tokens').select('invite_token').eq('trip_id',tripId).single();
+              if(tk?.invite_token){
+                S.inviteToken=tk.invite_token;
+                localStorage.setItem('sw_invite_'+tripId,tk.invite_token);
+                console.log('[SB] invite_token fetched from trip_tokens');
+              }
+            }
+          }catch(e){console.warn('[SB] Could not fetch invite_token:',e);}
+        }
       }
       // Показываем подсказку о веб-версии на не-нативных устройствах
       const isNative=window.Capacitor?.isNativePlatform?.();
@@ -1299,7 +1356,18 @@ async function joinTrip(){
           S.inviteToken=inviteToken;
           localStorage.setItem('sw_invite_'+code,inviteToken);
         } else {
-          toast('ℹ️ Для добавления расходов попросите организатора переслать вам ссылку-приглашение');
+          // Нет токена — получаем из Supabase (invite_token публичен, как и ссылка-приглашение)
+          try{
+            const sb2=await getSupabase();
+            if(sb2){
+              const{data:tk}=await sb2.from('trip_tokens').select('invite_token').eq('trip_id',code).single();
+              if(tk?.invite_token){
+                S.inviteToken=tk.invite_token;
+                localStorage.setItem('sw_invite_'+code,tk.invite_token);
+                console.log('[SB] invite_token fetched from trip_tokens');
+              }
+            }
+          }catch(e){console.warn('[SB] Could not fetch invite_token:',e);}
         }
         showOb('ob-pick');renderPickList();return;
       }
@@ -1482,7 +1550,8 @@ function renderMembersList(){
     const headC=isCouple?'var(--red)':'var(--amber)';
     const rowBdr=isCouple?'rgba(255,95,110,0.1)':'rgba(245,158,11,0.1)';
     items.push(`
-      <div style="border:1px solid ${bc};border-radius:var(--r);overflow:hidden;background:linear-gradient(135deg,${isCouple?'rgba(255,95,110,0.04)':'rgba(245,158,11,0.04)'},rgba(108,99,255,0.02))">
+      <div style="border:1px solid var(--b1);border-radius:var(--r);overflow:hidden;background:rgba(255,255,255,0.03)">
+        <div style="height:2px;background:linear-gradient(90deg,#6C63FF,#a78bfa,#6C63FF)"></div>
         <div style="padding:7px 13px;background:${headBg};border-bottom:1px solid ${bc};display:flex;align-items:center;gap:7px">
           <span style="font-size:0.76rem;color:${headC};font-weight:700">${lbl}</span>
           ${isMe?'<span style="font-size:0.62rem;background:var(--aglow);color:var(--ac2);padding:2px 6px;border-radius:4px;font-weight:600">вы здесь</span>':''}
@@ -1562,7 +1631,7 @@ function showMemberDetail(name){
           <div class="ei">
             <div class="en">${escHtml(e.name)}</div>
             <div class="em">
-              ${isPayer?`<span style="color:var(--green);font-size:0.72rem;font-weight:600">Платил</span>`:`<span style="color:var(--t3);font-size:0.72rem">Участник</span>`}
+              ${isPayer?`<span style="color:var(--green);font-size:0.72rem;font-weight:600">${paidVerb(e.paidBy)}</span>`:`<span style="color:var(--t3);font-size:0.72rem">Участник</span>`}
             </div>
           </div>
           <div style="text-align:right;flex-shrink:0">
@@ -1616,16 +1685,16 @@ function showMemberDetail(name){
 // =======================================================
 function expRow(e){
   const comment=e.comment?`<span style="color:var(--amber);font-size:0.7rem"> · ${escHtml(e.comment)}</span>`:'';
-  const dt=e.date?`<span style="color:var(--t3)">${fdate(e.date)}</span>`:'';
   const hasItems=e.items&&e.items.length>0;
   return `<div class="er" onclick="showExpDetail('${e.id}')" style="cursor:pointer">
     <div style="width:38px;height:38px;border-radius:var(--rxs);background:var(--s2);display:flex;align-items:center;justify-content:center;font-size:1.2rem;flex-shrink:0">${e.fromTreasury?'💰':'💳'}</div>
     <div class="ei">
       <div class="en">${escHtml(e.name)}${comment}${hasItems?`<span style="font-size:0.65rem;background:rgba(108,99,255,0.18);color:var(--ac2);padding:1px 5px;border-radius:4px;margin-left:5px;vertical-align:middle">${e.items.length} поз.</span>`:''}</div>
-      <div class="em">
+      <div class="em" style="flex-direction:column;align-items:flex-start;gap:2px;margin-top:3px">
+        ${e.date?`<span style="color:var(--t3)">📅 ${fdate(e.date)}</span>`:''}
         ${e.fromTreasury
-          ?`<span style="color:var(--green);font-weight:600">Из общей кассы</span>${dt}`
-          :`<span>Платил <span style="color:${ac(e.paidBy)};font-weight:600">${escHtml(e.paidBy)}</span></span>${dt}`}
+          ?`<span style="color:var(--green);font-weight:600">Из общей кассы</span>`
+          :`<span>${paidVerb(e.paidBy)} <span style="color:${ac(e.paidBy)};font-weight:600">${escHtml(e.paidBy)}</span></span>`}
       </div>
     </div>
     <div style="display:flex;align-items:center;gap:7px;flex-shrink:0">
@@ -1697,8 +1766,13 @@ function showExpDetail(id){
       <div style="font-size:1.9rem;font-weight:700;font-family:var(--mono)">${fm(e.amount)} <span style="font-size:0.9rem;color:var(--t2)">EUR</span></div>
       <div style="margin-top:7px;display:flex;gap:7px;flex-wrap:wrap">
         ${e.fromTreasury?'<span class="bdg bdg-am">Из кассы</span>':''}
-        ${!e.fromTreasury?`<span class="bdg bdg-p">${e.participants.length} участников</span>`:''}
+        ${!e.fromTreasury?`<span class="bdg bdg-p">${pluralParts(e.participants.length)}</span>`:''}
       </div>
+    </div>
+    <div id="exp-addr-${e.id}" style="margin-bottom:12px">
+      ${e.address
+        ?`<a href="javascript:void(0)" onclick="openAddress('${escHtml(e.address).replace(/'/g,"\\'")}')" style="display:inline-flex;align-items:center;gap:5px;color:var(--accent);font-size:0.84rem;text-decoration:none;word-break:break-all">📍 ${escHtml(e.address)}</a>`
+        :`<button onclick="addExpAddress('${e.id}')" style="display:inline-flex;align-items:center;gap:5px;border:1.5px dashed var(--b2);background:none;border-radius:var(--rsm);padding:7px 12px;cursor:pointer;color:var(--t3);font-size:0.82rem">📍 Добавить адрес</button>`}
     </div>
     <div style="display:flex;flex-direction:column;gap:7px;margin-bottom:14px">
       ${e.fromTreasury
@@ -1708,7 +1782,7 @@ function showExpDetail(id){
          </div>`
         :`<div style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--s1);border-radius:var(--rsm)">
           <div class="av av-sm" style="background:var(--gglow);color:var(--green)">💳</div>
-          <div style="flex:1;font-size:0.86rem">Платил: <span style="color:${ac(e.paidBy)};font-weight:600">${escHtml(e.paidBy)}</span></div>
+          <div style="flex:1;font-size:0.86rem">${paidVerb(e.paidBy)}: <span style="color:${ac(e.paidBy)};font-weight:600">${escHtml(e.paidBy)}</span></div>
           <div style="font-family:var(--mono);font-weight:600">${fm(e.amount)} €</div>
         </div>
         ${e.participants.map(p=>{
@@ -1744,21 +1818,33 @@ function showExpDetail(id){
 
 function openExpEdit(id){
   const e=S.expenses.find(x=>x.id===id);if(!e)return;
+  const payerOpts=S.members.map(m=>`<option value="${escHtml(m.name)}"${e.paidBy===m.name?' selected':''}>${escHtml(m.name)}</option>`).join('');
   document.getElementById('m-exp-detail-content').innerHTML=`
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
       <div class="mdl-title" style="font-size:1rem">✏️ Редактировать</div>
       <button class="btn btn-g btn-sm btn-ic" onclick="showExpDetail('${e.id}')"><i data-lucide="x" style="width:15px;height:15px"></i></button>
     </div>
     <div class="iw"><label class="il">Название</label>
-      <input class="inp" id="ed-name" value="${escHtml(e.name)}">
+      <input class="inp" id="ed-name" value="${escHtml(e.name)}" placeholder="Название расхода">
     </div>
-    <div class="iw"><label class="il">Сумма, €</label>
-      <input class="inp" id="ed-amount" type="number" min="0" step="0.01" value="${e.amount}">
+    <div class="iw"><label class="il">Комментарий</label>
+      <input class="inp" id="ed-comment" value="${escHtml(e.comment||'')}" placeholder="Необязательно">
     </div>
-    <div class="iw"><label class="il">Комментарий (необязательно)</label>
-      <input class="inp" id="ed-comment" value="${escHtml(e.comment||'')}">
+    <div class="iw"><label class="il">Адрес</label>
+      <input class="inp" id="ed-address" value="${escHtml(e.address||'')}" placeholder="Необязательно">
     </div>
-    <div style="display:flex;gap:8px;margin-top:4px">
+    <div style="display:flex;gap:10px">
+      <div class="iw" style="flex:1"><label class="il">Сумма, €</label>
+        <input class="inp" id="ed-amount" type="number" min="0" step="0.01" value="${e.amount}">
+      </div>
+      <div class="iw" style="flex:1"><label class="il">Дата</label>
+        <input class="inp" id="ed-date" type="date" value="${e.date||''}">
+      </div>
+    </div>
+    ${!e.fromTreasury?`<div class="iw"><label class="il">Кто платил</label>
+      <select class="inp" id="ed-payer" style="cursor:pointer">${payerOpts}</select>
+    </div>`:''}
+    <div style="display:flex;gap:8px;margin-top:8px">
       <button class="btn btn-g btn-fw" onclick="showExpDetail('${e.id}')">Отмена</button>
       <button class="btn btn-p btn-fw" onclick="saveExpEdit('${e.id}')"><i data-lucide="check" style="width:14px;height:14px"></i> Сохранить</button>
     </div>
@@ -1771,10 +1857,24 @@ function saveExpEdit(id){
   const name=document.getElementById('ed-name').value.trim();
   const amount=parseFloat(document.getElementById('ed-amount').value);
   const comment=document.getElementById('ed-comment').value.trim();
+  const address=document.getElementById('ed-address').value.trim();
+  const date=document.getElementById('ed-date').value||e.date||'';
+  const payerEl=document.getElementById('ed-payer');
+  const payer=payerEl?payerEl.value:e.paidBy;
   if(!name){toast('⚠️ Введите название');return;}
   if(!amount||amount<=0){toast('⚠️ Введите сумму');return;}
   if(e.fromTreasury&&e.amount!==amount)S.treasury.spent=S.treasury.spent-e.amount+amount;
-  e.name=name;e.amount=amount;e.comment=comment;
+  // Если у расхода есть персональные доли (из «Заказ»), пересчитываем их пропорционально
+  if(e.splits&&Object.keys(e.splits).length&&e.amount&&e.amount!==amount){
+    const ratio=amount/e.amount;
+    const newSplits={};
+    Object.entries(e.splits).forEach(([person,val])=>{
+      newSplits[person]=Math.round(val*ratio*100)/100;
+    });
+    e.splits=newSplits;
+  }
+  e.name=name;e.amount=amount;e.comment=comment;e.address=address;e.date=date;
+  if(!e.fromTreasury)e.paidBy=payer;
   save();renderAll();showExpDetail(id);
   toast('✅ Расход обновлён');
 }
@@ -1783,6 +1883,7 @@ function delExp(id){
   if(!isTripAdmin()){toast('❌ Только Админ');return}
   const e=S.expenses.find(x=>x.id===id);
   if(e&&e.fromTreasury)S.treasury.spent-=e.amount;
+  _pendingDeletes.add(id); // явная пометка к удалению из Supabase
   S.expenses=S.expenses.filter(x=>x.id!==id);
   closeModal('m-exp-detail');save();renderAll();toast('🗑 Удалено')
 }
@@ -2500,7 +2601,7 @@ function showDebtDetail(fromName, toName, totalAmt){
           </div>
           <div style="font-size:0.75rem;color:var(--t2);display:flex;gap:8px;flex-wrap:wrap">
             <span>${l.exp.date?fdate(l.exp.date):''}</span>
-            <span>Платил: <span style="color:${ac(l.exp.paidBy)};font-weight:500">${escHtml(l.exp.paidBy)}</span></span>
+            <span>${paidVerb(l.exp.paidBy)}: <span style="color:${ac(l.exp.paidBy)};font-weight:500">${escHtml(l.exp.paidBy)}</span></span>
             <span>Всего: ${fm(l.exp.amount)} €</span>
             <span>${l.exp.participants.length} уч.</span>
           </div>
@@ -2518,7 +2619,8 @@ function showDebtDetail(fromName, toName, totalAmt){
 
 function showPersonDetail(name){
   const paid=calcPaid();const bal=calcBal();const net=bal[name]||0;
-  const myExp=S.expenses.filter(e=>e.participants.includes(name)||e.paidBy===name);
+  // Исключаем кассовые расходы — они не создают личный долг и отображаются в разделе Касса
+  const myExp=S.expenses.filter(e=>!e.fromTreasury&&(e.participants.includes(name)||e.paidBy===name));
   const html=`
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px">
       <div style="display:flex;align-items:center;gap:11px">
@@ -2534,8 +2636,17 @@ function showPersonDetail(name){
     <div style="font-size:0.76rem;color:var(--t2);font-weight:600;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">Все связанные расходы</div>
     <div style="display:flex;flex-direction:column;gap:7px">
       ${myExp.map(e=>{
-        const ps=perShare(e);const u=units(name);
-        const share=e.participants.includes(name)?ps*u:0;
+        // Для заказов с персональными долями — берём split напрямую
+        // Для обычных расходов — считаем через perShare + unitsForExp (учитывает пару)
+        let share=0;
+        if(e.participants.includes(name)){
+          if(e.splits&&Object.keys(e.splits).length){
+            share=e.splits[name]||0;
+          } else {
+            const ps=perShare(e);const u=unitsForExp(e,name);
+            share=ps*u;
+          }
+        }
         const paid_=e.paidBy===name?e.amount:0;
         const net_=paid_-share;
         return `<div style="padding:11px 13px;background:var(--s1);border:1px solid var(--b1);border-radius:var(--rsm)">
@@ -2888,7 +2999,12 @@ function _moShowResult(){
 function renderMoItems(){
   const list=document.getElementById('mo-items-list');
   if(!list)return;
-  list.innerHTML=_moItems.map((it,i)=>`
+  if(!window._moOpenPanels)window._moOpenPanels=new Set();
+  list.innerHTML=_moItems.map((it,i)=>{
+    const panelOpen=_moOpenPanels.has(i);
+    const selCount=it.assignees.length;
+    const pprice=selCount>0?Math.round(it.price/selCount*100)/100:it.price;
+    return `
     <div style="background:var(--s1);border:1px solid var(--b1);border-radius:var(--rsm);overflow:hidden">
       <div style="display:flex;align-items:center;gap:8px;padding:8px 11px">
         <div style="flex:1">
@@ -2896,23 +3012,33 @@ function renderMoItems(){
           ${it.qty>1?`<span style="color:var(--t3);font-size:0.74rem;margin-left:4px">×${it.qty}</span>`:''}
         </div>
         <span style="font-family:var(--mono);font-weight:700;font-size:0.9rem;color:var(--accent)">${fm(it.price)} €</span>
+        <button data-action="mo-people" data-idx="${i}" style="position:relative;border:none;background:${panelOpen?'var(--accent)':'var(--b1)'};color:${panelOpen?'#fff':'var(--t2)'};cursor:pointer;padding:4px 8px;border-radius:7px;line-height:1;font-size:0.85rem;display:inline-flex;align-items:center;gap:3px;transition:all 0.15s">
+          👤<span style="background:${panelOpen?'rgba(255,255,255,0.35)':'var(--accent)'};color:#fff;border-radius:8px;font-size:0.62rem;font-weight:700;padding:1px 4px;min-width:14px;text-align:center">${selCount}</span>
+        </button>
         <button data-action="mo-remove" data-idx="${i}" style="border:none;background:none;color:var(--t3);cursor:pointer;padding:4px;line-height:1">
           <i data-lucide="x" style="width:13px;height:13px"></i>
         </button>
       </div>
-      <div style="padding:5px 10px 9px;border-top:1px solid var(--b1);display:flex;flex-wrap:wrap;gap:5px;align-items:center">
-        <span style="font-size:0.71rem;color:var(--t3);margin-right:1px">Для:</span>
-        ${S.members.map(m=>{
-          const sel=it.assignees.includes(m.name);
-          return `<div data-action="mo-toggle" data-idx="${i}" data-mo-assignee="${escHtml(m.name)}"
-            style="display:inline-flex;align-items:center;gap:3px;padding:3px 9px 3px 5px;border-radius:20px;cursor:pointer;font-size:0.76rem;font-weight:${sel?'700':'400'};
-            background:${sel?'var(--accent)':'var(--b1)'};color:${sel?'#fff':'var(--t2)'};transition:all 0.15s">
-            <div style="width:15px;height:15px;border-radius:50%;background:${ac(m.name)};display:flex;align-items:center;justify-content:center;font-size:0.5rem;color:#fff;font-weight:700;flex-shrink:0">${escHtml((m.name[0]||'?').toUpperCase())}</div>
-            ${escHtml(m.name)}
-          </div>`;
-        }).join('')}
-      </div>
-    </div>`).join('');
+      ${panelOpen?`
+      <div style="padding:6px 10px 10px;border-top:1px solid var(--b1)">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+          <span style="font-size:0.71rem;color:var(--t3)">Для:</span>
+          ${selCount>0?`<span style="font-size:0.71rem;color:var(--t3);font-family:var(--mono)">${fm(pprice)} €/чел.</span>`:''}
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:5px">
+          ${S.members.map(m=>{
+            const sel=it.assignees.includes(m.name);
+            return `<div data-action="mo-toggle" data-idx="${i}" data-mo-assignee="${escHtml(m.name)}"
+              style="display:inline-flex;align-items:center;gap:3px;padding:3px 9px 3px 5px;border-radius:20px;cursor:pointer;font-size:0.76rem;font-weight:${sel?'700':'400'};
+              background:${sel?'var(--accent)':'var(--b1)'};color:${sel?'#fff':'var(--t2)'};transition:all 0.15s">
+              <div style="width:15px;height:15px;border-radius:50%;background:${ac(m.name)};display:flex;align-items:center;justify-content:center;font-size:0.5rem;color:#fff;font-weight:700;flex-shrink:0">${escHtml((m.name[0]||'?').toUpperCase())}</div>
+              ${sel?'✓ ':''}${escHtml(m.name)}
+            </div>`;
+          }).join('')}
+        </div>
+      </div>`:''}
+    </div>`;
+  }).join('');
   const total=_moItems.reduce((s,it)=>s+it.price,0);
   const totEl=document.getElementById('mo-total');
   if(totEl)totEl.textContent=fm(total)+' €';
@@ -2920,11 +3046,26 @@ function renderMoItems(){
 }
 
 function moItemsClick(e){
+  const peopleBtn=e.target.closest('[data-action="mo-people"]');
+  if(peopleBtn){
+    const idx=parseInt(peopleBtn.dataset.idx);
+    if(!window._moOpenPanels)window._moOpenPanels=new Set();
+    if(_moOpenPanels.has(idx))_moOpenPanels.delete(idx);
+    else _moOpenPanels.add(idx);
+    renderMoItems();return;
+  }
   const removeBtn=e.target.closest('[data-action="mo-remove"]');
   if(removeBtn){
     const idx=parseInt(removeBtn.dataset.idx);
+    if(window._moOpenPanels){
+      // Пересчитываем индексы: удаляем idx, сдвигаем всё что было после него на -1
+      const updated=new Set();
+      _moOpenPanels.forEach(i=>{if(i!==idx)updated.add(i>idx?i-1:i);});
+      window._moOpenPanels=updated;
+    }
     _moItems.splice(idx,1);
     if(!_moItems.length){
+      if(window._moOpenPanels)window._moOpenPanels=new Set();
       document.getElementById('mo-result').style.display='none';
       document.getElementById('mo-save-footer').style.display='none';
       document.getElementById('mo-manual-hint').style.display='flex';
@@ -3226,28 +3367,80 @@ function saveRename(){
   // Update everywhere
   S.members=S.members.map(m=>m.name===oldName?{...m,name:newName}:m);
   S.groups=S.groups.map(g=>({...g,members:g.members.map(n=>n===oldName?newName:n)}));
-  S.expenses=S.expenses.map(e=>({
-    ...e,
-    paidBy:e.paidBy===oldName?newName:e.paidBy,
-    participants:e.participants.map(p=>p===oldName?newName:p),
-    items:(e.items||[]).map(it=>({...it,assignedTo:it.assignedTo===oldName?newName:it.assignedTo}))
+  S.expenses=S.expenses.map(e=>{
+    // Переименовываем ключи в splits (персональные доли «Заказа»)
+    let newSplits=e.splits;
+    if(e.splits&&e.splits[oldName]!==undefined){
+      newSplits={...e.splits,[newName]:e.splits[oldName]};
+      delete newSplits[oldName];
+    }
+    return {
+      ...e,
+      paidBy:e.paidBy===oldName?newName:e.paidBy,
+      participants:(e.participants||[]).map(p=>p===oldName?newName:p),
+      splits:newSplits,
+      items:(e.items||[]).map(it=>({
+        ...it,
+        assignedTo:it.assignedTo===oldName?newName:it.assignedTo,
+        assignees:(it.assignees||[]).map(a=>a===oldName?newName:a)
+      }))
+    };
+  });
+  // Касса
+  if(S.treasury.holder===oldName)S.treasury.holder=newName;
+  S.treasury.contributions=(S.treasury.contributions||[]).map(c=>
+    c.member===oldName?{...c,member:newName}:c
+  );
+  // Погашённые долги
+  S.settledDebts=(S.settledDebts||[]).map(sd=>({
+    ...sd,
+    from:sd.from===oldName?newName:sd.from,
+    to:sd.to===oldName?newName:sd.to
   }));
+  // Цвета участников
+  if(S.memberColors&&S.memberColors[oldName]!==undefined){
+    S.memberColors={...S.memberColors,[newName]:S.memberColors[oldName]};
+    delete S.memberColors[oldName];
+  }
   if(S.me===oldName){S.me=newName}
   save();closeModal('m-rename');renderAll();renderSettings();
   toast('✅ Имя обновлено: '+newName)
 }
 
 function toggleMSel(el,name){el.classList.toggle('checked')}
+let _pendingGroupMembers=[];
 function createGroup(){
   if(!isTripAdmin()){toast('❌ Только Админ');return}
   const checked=[...document.querySelectorAll('.member-sel.checked')].map(el=>el.dataset.ms);
   if(checked.length<2){toast('⚠️ Выберите минимум 2 участников');return}
-  // Remove existing groups of these members
-  S.groups=S.groups.filter(g=>!g.members.some(m=>checked.includes(m)));
   const type=checked.length===2?'couple':'family';
-  const label=checked.length===2?null:prompt('Название семьи (необязательно)','Семья')||'Семья';
-  S.groups.push({id:uid(),type,members:checked,label});
-  save();renderSettings();renderAll();toast('✅ Группа создана')
+  if(type==='family'){
+    // Вместо prompt() (заблокирован в iOS PWA) — показываем модал ввода
+    _pendingGroupMembers=checked;
+    document.getElementById('m-debt-detail-content').innerHTML=`
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+        <div class="mdl-title">👨‍👩‍👧 Название семьи</div>
+        <button class="btn btn-g btn-sm btn-ic" onclick="closeModal('m-debt-detail')"><i data-lucide="x" style="width:14px;height:14px"></i></button>
+      </div>
+      <div class="iw" style="margin-bottom:14px">
+        <label class="il">Название (необязательно)</label>
+        <input class="inp" id="grp-name-inp" placeholder="Семья" value="Семья">
+      </div>
+      <button class="btn btn-p btn-fw" onclick="_confirmCreateGroup()"><i data-lucide="users" style="width:14px;height:14px"></i> Создать</button>`;
+    openModal('m-debt-detail');initializeIcons();
+    setTimeout(()=>{const el=document.getElementById('grp-name-inp');if(el){el.focus();el.select();}},80);
+  } else {
+    S.groups=S.groups.filter(g=>!g.members.some(m=>checked.includes(m)));
+    S.groups.push({id:uid(),type:'couple',members:checked,label:null});
+    save();renderSettings();renderAll();toast('✅ Группа создана');
+  }
+}
+function _confirmCreateGroup(){
+  const label=document.getElementById('grp-name-inp')?.value.trim()||'Семья';
+  S.groups=S.groups.filter(g=>!g.members.some(m=>_pendingGroupMembers.includes(m)));
+  S.groups.push({id:uid(),type:'family',members:_pendingGroupMembers,label});
+  _pendingGroupMembers=[];
+  save();closeModal('m-debt-detail');renderSettings();renderAll();toast('✅ Группа создана');
 }
 
 function renderSettingGroups(){
@@ -4020,7 +4213,9 @@ function saveReceiptExp(){
   const paidByEl=document.querySelector('[data-ap].on');
   const paidBy=paidByEl?paidByEl.dataset.ap:S.me;
   const items=S.scan.items.map(i=>({name:i.name,price:i.price,assignedTo:i.assignedTo||'Все'}));
-  const exp={id:uid(),name,amount:total,comment:`${S.scan.items.length} поз.`,date,paidBy,participants,fromTreasury:false,items};
+  // splits нужен для корректного расчёта балансов по персональным долям
+  const splits=Object.keys(personAmt).length?{...personAmt}:{};
+  const exp={id:uid(),name,amount:total,comment:`${S.scan.items.length} поз.`,date,paidBy,participants,splits,fromTreasury:false,items,address:''};
   S.expenses.push(exp);
   // Save to receipt archive (metadata only)
   if(!S.receipts)S.receipts=[];
@@ -4100,7 +4295,10 @@ function saveMenuExp(){
   const total=items.reduce((s,i)=>s+i.price,0);
   if(!total){toast('⚠️ Никто ничего не выбрал');return}
   const parts=[...new Set(items.map(i=>i.assignedTo))];
-  const exp={id:uid(),name:'Заказ из меню',amount:total,comment:`${items.length} позиций`,date:today(),paidBy:S.scan.menuPaidBy||S.me,participants:parts,fromTreasury:false,items};
+  // Считаем splits — сумма позиций каждого участника
+  const splits={};
+  items.forEach(it=>{if(it.assignedTo)splits[it.assignedTo]=Math.round(((splits[it.assignedTo]||0)+it.price)*100)/100;});
+  const exp={id:uid(),name:'Заказ из меню',amount:total,comment:`${items.length} позиций`,date:today(),paidBy:S.scan.menuPaidBy||S.me,participants:parts,splits,fromTreasury:false,items,address:''};
   S.expenses.push(exp);save();renderAll();
   S.scan.menuSelections={};S.scan.menuPerson=null;
   document.getElementById('sc-menu-pick').style.display='none';
@@ -4289,6 +4487,31 @@ function ensureUUID(id){
   return id&&rx.test(id)?id:crypto.randomUUID();
 }
 
+// Мёрдж: загружает расходы из Supabase и добавляет те, которых нет локально.
+// Вызывается ПЕРЕД каждым sbSync чтобы не затереть расходы других участников.
+async function mergeRemoteExpenses(sb){
+  if(!S.trip)return;
+  try{
+    const{data}=await sb.from('expenses')
+      .select('*')
+      .eq('trip_id',S.trip.id);
+    if(!data)return;
+    const localIds=new Set(S.expenses.map(e=>e.id));
+    data.forEach(e=>{
+      if(!localIds.has(e.id)&&!_pendingDeletes.has(e.id)){
+        S.expenses.push({
+          id:e.id,name:e.name,amount:parseFloat(e.amount),
+          comment:e.comment||'',date:e.date||'',
+          paidBy:e.paid_by,participants:e.participants||[],
+          fromTreasury:e.from_treasury||false,items:e.items||[],
+          createdBy:e.created_by||null,pairReps:e.pair_reps||null,
+          address:e.address||'',splits:e.splits||null
+        });
+      }
+    });
+  }catch(err){console.warn('[SB] mergeRemoteExpenses error:',err.message);}
+}
+
 // Полная синхронизация состояния в Supabase
 // Если есть invite_token — через защищённый RPC (новый путь)
 // Иначе — прямые запросы к таблицам (старые поездки, backward compat)
@@ -4302,6 +4525,19 @@ async function sbSync(){
   const _ind=document.getElementById('rt-indicator');
   if(_ind){_ind.style.background='var(--amber)';_ind.style.animation='none';}
   try{
+    // Если нет invite_token — пробуем получить из trip_tokens (RLS теперь разрешает SELECT anon)
+    if(!S.inviteToken&&S.trip?.id){
+      try{
+        const{data:tk}=await sb.from('trip_tokens').select('invite_token').eq('trip_id',S.trip.id).single();
+        if(tk?.invite_token){
+          S.inviteToken=tk.invite_token;
+          localStorage.setItem('sw_invite_'+S.trip.id,tk.invite_token);
+          console.log('[SB] invite_token auto-fetched in sbSync');
+        }
+      }catch(e){console.warn('[SB] Could not auto-fetch invite_token:',e);}
+    }
+    // Мёрдж: подтягиваем расходы других участников ПЕРЕД отправкой своих данных
+    await mergeRemoteExpenses(sb);
     if(S.inviteToken){
       // Новый безопасный путь: один RPC вместо 5 прямых запросов
       const payload={
@@ -4314,7 +4550,9 @@ async function sbSync(){
           paid_by:e.paidBy,participants:e.participants||[],
           from_treasury:e.fromTreasury||false,items:e.items||[],
           created_by:e.createdBy||null,
-          pair_reps:e.pairReps||null
+          pair_reps:e.pairReps||null,
+          address:e.address||null,
+          splits:e.splits&&Object.keys(e.splits).length?e.splits:null
         })),
         treasury:{
           total:S.treasury.total||0,
@@ -4392,24 +4630,26 @@ async function _sbSyncLegacy(sb){
   } else {
     await sb.from('groups').delete().eq('trip_id',S.trip.id);
   }
-  // 4. Расходы
+  // 4. Расходы — upsert всех локальных, удаляем только явно помеченные
   if(S.expenses.length){
-    const eIds=S.expenses.map(e=>ensureUUID(e.id));
     await sb.from('expenses').upsert(
       S.expenses.map(e=>({
         id:ensureUUID(e.id),trip_id:S.trip.id,name:e.name,amount:e.amount,
         comment:e.comment||null,date:e.date||null,paid_by:e.paidBy,
         participants:e.participants||[],from_treasury:e.fromTreasury||false,
         items:e.items||[],created_by:e.createdBy||null,
-        pair_reps:e.pairReps||null
+        pair_reps:e.pairReps||null,address:e.address||null,
+        splits:e.splits&&Object.keys(e.splits).length?e.splits:null
       })),
       {onConflict:'id'}
     );
+  }
+  // Удаляем только те, что явно удалены локально (не затираем чужие расходы)
+  if(_pendingDeletes.size>0){
     await sb.from('expenses').delete()
       .eq('trip_id',S.trip.id)
-      .not('id','in',`(${eIds.map(id=>`"${id}"`).join(',')})`);
-  } else {
-    await sb.from('expenses').delete().eq('trip_id',S.trip.id);
+      .in('id',[..._pendingDeletes]);
+    _pendingDeletes.clear();
   }
   // 5. Касса
   try{
@@ -4461,7 +4701,9 @@ async function loadFromSupabase(tripId){
       paidBy:e.paid_by,participants:e.participants||[],
       fromTreasury:e.from_treasury||false,items:e.items||[],
       createdBy:e.created_by||null,
-      pairReps:e.pair_reps||null
+      pairReps:e.pair_reps||null,
+      address:e.address||'',
+      splits:e.splits||null
     }));
     S.treasury={
       total:parseFloat(trRes.data?.total||0),
