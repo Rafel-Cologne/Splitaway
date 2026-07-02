@@ -1458,8 +1458,16 @@ function renderDash(){
   if(coupleMode){
     const groupedDebts=buildGroupedDebts(rawDebts);
     const rep=getCoupleRep();
-    myOwe=groupedDebts.filter(d=>d.fromInfo.key===myKey).map(d=>({...d,fromInfo:{key:rep,isGroup:false,members:[rep]}}));
-    myOwed=groupedDebts.filter(d=>d.toInfo.key===myKey).map(d=>({...d,toInfo:{key:rep,isGroup:false,members:[rep]}}));
+    // Apply per-group rep to the other side of each debt (cosmetic: show rep name instead of "A + B")
+    const applyGrpRep=(info)=>{
+      if(!info.isGroup)return info;
+      const sortedKey=info.key.startsWith('grp§')?info.key.slice(4):null;
+      if(!sortedKey)return info;
+      const r=getGroupRep(sortedKey);
+      return r?{key:r,isGroup:false,members:[r]}:info;
+    };
+    myOwe=groupedDebts.filter(d=>d.fromInfo.key===myKey).map(d=>({...d,fromInfo:{key:rep,isGroup:false,members:[rep]},toInfo:applyGrpRep(d.toInfo)}));
+    myOwed=groupedDebts.filter(d=>d.toInfo.key===myKey).map(d=>({...d,toInfo:{key:rep,isGroup:false,members:[rep]},fromInfo:applyGrpRep(d.fromInfo)}));
   } else if(myGrp){
     // "Считать отдельно": берём суммарный долг пары и делим на кол-во участников
     const groupedDebts=buildGroupedDebts(rawDebts);
@@ -4505,10 +4513,16 @@ function toggleTheme(){
   setTheme(cur==='dark'?'light':'dark');
 }
 function isCoupleMode(){return localStorage.getItem('sw_couple_mode')!=='0'}
-function getCoupleRep(){return localStorage.getItem('sw_couple_rep')||S.me}
-function setCoupleRep(name){
-  localStorage.setItem('sw_couple_rep',name);
-  updateCoupleModeBtn();renderHome();
+// Per-group rep: key = sorted member names joined with §, e.g. "Аня§Раф"
+function getGroupRep(sortedKey){return localStorage.getItem('sw_grp_rep_'+sortedKey)||null}
+function setGroupRep(sortedKey,name){
+  localStorage.setItem('sw_grp_rep_'+sortedKey,name);
+  updateCoupleModeBtn();renderDash();
+}
+function getCoupleRep(){
+  const myGrp=groupOf(S.me);
+  if(myGrp){const key=myGrp.members.slice().sort().join('§');return getGroupRep(key)||S.me;}
+  return S.me;
 }
 function updateCoupleModeBtn(){
   const on=isCoupleMode();
@@ -4520,22 +4534,27 @@ function updateCoupleModeBtn(){
   if(knob)knob.style.left=on?'23px':'3px';
   if(picker)picker.style.display=on?'flex':'none';
   if(on&&chipsEl){
-    const myGrp=groupOf(S.me);
-    const members=myGrp?myGrp.members:[S.me];
-    const rep=getCoupleRep();
-    chipsEl.innerHTML=members.map(m=>`<div class="wp${m===rep?' on':''}" data-action="set-couple-rep" data-rep-name="${escHtml(m)}" style="cursor:pointer">${escHtml(m)}</div>`).join('');
+    // Show rep picker for ALL groups (not just current user's pair)
+    chipsEl.innerHTML=S.groups.map(g=>{
+      const key=g.members.slice().sort().join('§');
+      const rep=getGroupRep(key)||g.members[0];
+      return `<div style="margin-bottom:6px">
+        <div style="font-size:0.75rem;color:var(--t3);margin-bottom:3px">${escHtml(g.members.join(' + '))}:</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">${g.members.map(m=>`<div class="wp${m===rep?' on':''}" data-action="set-group-rep" data-group-key="${escHtml(key)}" data-rep-name="${escHtml(m)}" style="cursor:pointer">${escHtml(m)}</div>`).join('')}</div>
+      </div>`;
+    }).join('');
   }
 }
 function toggleCoupleMode(){
   if(!isTripAdmin()){toast('❌ Только Админ');return}
   localStorage.setItem('sw_couple_mode',isCoupleMode()?'0':'1');
   updateCoupleModeBtn();
-  renderHome();
+  renderDash();
 }
 // event delegation for representative picker
 document.addEventListener('click',function(e){
-  const chip=e.target.closest('[data-action="set-couple-rep"]');
-  if(chip)setCoupleRep(chip.dataset.repName);
+  const chip=e.target.closest('[data-action="set-group-rep"]');
+  if(chip){setGroupRep(chip.dataset.groupKey,chip.dataset.repName);return;}
 });
 
 // =======================================================
@@ -5236,26 +5255,4 @@ function init(){
         // Нет активной поездки — показываем loading
         document.getElementById('pg-ob').style.display='flex';
         handleWebJoin(tripId, token);
-      }catch(e){console.warn('[Cap appUrlOpen]',e);}
-    });
-  }
-
-  // ── ПВА: не-нативный браузер — показываем подсказку пользователю ──
-  // (Всё остальное уже обрабатывается через ?trip= в URL при старте)
-
-  // ── Event delegation для групповых долгов ──────────────────────────────
-  // Регистрируем на document (не на #pg-app) чтобы покрыть модалы,
-  // которые находятся за пределами #pg-app в DOM.
-  document.addEventListener('click', handleDebtAction);
-}
-function pickGender(hiddenId,btn,val){
-  document.getElementById(hiddenId).value=val;
-  btn.closest('.gender-toggle').querySelectorAll('.gtb').forEach(b=>b.classList.remove('active'));
-  btn.classList.add('active');
-}
-
-// Запускаем после загрузки всех defer-скриптов (в т.ч. lucide)
-document.addEventListener('DOMContentLoaded', init);
-</script>
-</body>
-</html>
+      }catch(e){console.warn('[
