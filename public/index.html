@@ -1786,7 +1786,7 @@ function showExpDetail(id){
           <div style="font-family:var(--mono);font-weight:600">${fm(e.amount)} €</div>
         </div>
         ${e.participants.map(p=>{
-          const u=units(p);const sh=ps*u;
+          const sh=(e.splits&&Object.keys(e.splits).length)?(e.splits[p]||0):ps*unitsForExp(e,p);
           return `<div style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--s1);border-radius:var(--rsm)">
             <div class="av av-sm" style="background:${ac(p)}">${escHtml(p[0]||'?')}</div>
             <div style="flex:1;font-size:0.86rem;color:${ac(p)};font-weight:500">${escHtml(p)}</div>
@@ -1798,11 +1798,16 @@ function showExpDetail(id){
     <div style="margin-bottom:14px">
       <div class="sec-ttl" style="margin-bottom:8px">Заказы участников</div>
       <div class="card" style="padding:14px">
-        ${e.items.map(it=>`<div class="ritem">
-          <div style="flex:1;font-size:0.86rem">${escHtml(it.name)}</div>
-          <div style="color:${it.assignedTo?ac(it.assignedTo):'var(--t2)'};font-size:0.76rem;font-weight:600">${it.assignedTo?escHtml(it.assignedTo):'Все'}</div>
-          <div style="font-family:var(--mono);font-weight:600;font-size:0.86rem">${fm(it.price)} €</div>
-        </div>`).join('')}
+        ${e.items.map(it=>{
+          const asgn=it.assignees&&it.assignees.length?it.assignees:(it.assignedTo&&it.assignedTo!=='Все'?[it.assignedTo]:null);
+          const isAll=!asgn||asgn.length===S.members.length;
+          const clr=(!isAll&&asgn.length===1)?ac(asgn[0]):'var(--t2)';
+          const lbl=isAll?'Все':asgn.map(escHtml).join(', ');
+          return `<div class="ritem">
+            <div style="flex:1;font-size:0.86rem">${escHtml(it.name)}</div>
+            <div style="color:${clr};font-size:0.76rem;font-weight:600">${lbl}</div>
+            <div style="font-family:var(--mono);font-weight:600;font-size:0.86rem">${fm(it.price)} €</div>
+          </div>`;}).join('')}
       </div>
     </div>`:''}
     ${canEdit?`<button class="btn btn-d btn-fw" onclick="delExp('${e.id}')"><i data-lucide="trash-2" style="width:13px;height:13px"></i> Удалить расход</button>`:''}
@@ -1815,6 +1820,60 @@ function showExpDetail(id){
     if(btn)openExpEdit(btn.dataset.expId);
   };
 }
+
+// ── Редактор позиций «Заказ» ────────────────────────────────
+let _editItems=[];
+function _renderEditItemsList(){
+  const el=document.getElementById('ed-items-list');if(!el)return;
+  el.innerHTML=_editItems.map((it,i)=>`
+    <div style="padding:10px 0;border-bottom:1px solid var(--b1)">
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+        <input class="inp" style="flex:1;font-size:0.82rem;padding:7px 10px" id="edi-n-${i}"
+          value="${escHtml(it.name)}" oninput="_editItems[${i}].name=this.value" placeholder="Название">
+        <input class="inp" style="width:72px;font-family:var(--mono);padding:7px 8px;text-align:right"
+          type="number" min="0" step="0.01" value="${it.price}"
+          oninput="_editItems[${i}].price=parseFloat(this.value)||0;_updateEditTotal()" placeholder="€">
+        <button onclick="_editItemDel(${i})" style="background:none;border:none;cursor:pointer;color:var(--red);font-size:1.1rem;padding:0 4px;line-height:1">✕</button>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:5px">
+        ${S.members.map(m=>{const sel=it.assignees.includes(m.name);
+          return `<div onclick="_editItemTgl(${i},'${m.name.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')"
+            style="display:flex;align-items:center;gap:4px;padding:3px 10px;border-radius:20px;cursor:pointer;font-size:0.75rem;font-weight:600;user-select:none;
+            background:${sel?ac(m.name):'var(--s2)'};color:${sel?'#fff':'var(--t2)'}">
+            <span style="width:14px;height:14px;border-radius:50%;background:${sel?'rgba(255,255,255,0.3)':ac(m.name)};color:#fff;display:flex;align-items:center;justify-content:center;font-size:0.6rem;flex-shrink:0">${escHtml(m.name[0]||'?')}</span>
+            ${escHtml(m.name)}
+          </div>`;}).join('')}
+      </div>
+    </div>
+  `).join('')+`
+    <button class="btn btn-g btn-sm" style="margin-top:10px;width:100%" onclick="_editItemAdd()">+ Добавить позицию</button>
+    <div style="display:flex;justify-content:space-between;margin-top:10px;padding-top:8px;border-top:1px solid var(--b1)">
+      <span style="color:var(--t2);font-size:0.82rem">Итого</span>
+      <span id="ed-items-total" style="font-family:var(--mono);font-weight:600"></span>
+    </div>
+  `;
+  _updateEditTotal();
+}
+function _updateEditTotal(){
+  const t=_editItems.reduce((s,it)=>s+(parseFloat(it.price)||0),0);
+  const r=Math.round(t*100)/100;
+  const amEl=document.getElementById('ed-amount');if(amEl)amEl.value=r;
+  const tEl=document.getElementById('ed-items-total');if(tEl)tEl.textContent=fm(r)+' €';
+}
+function _editItemTgl(i,name){
+  const it=_editItems[i];if(!it)return;
+  const pos=it.assignees.indexOf(name);
+  if(pos===-1)it.assignees.push(name);
+  else if(it.assignees.length>1)it.assignees.splice(pos,1);
+  _renderEditItemsList();
+}
+function _editItemDel(i){_editItems.splice(i,1);_renderEditItemsList();}
+function _editItemAdd(){
+  _editItems.push({name:'',price:0,assignees:[S.me||S.members[0]?.name||'']});
+  _renderEditItemsList();
+  setTimeout(()=>{const ins=document.querySelectorAll('[id^="edi-n-"]');if(ins.length)ins[ins.length-1].focus();},60);
+}
+// ────────────────────────────────────────────────────────────
 
 function openExpEdit(id){
   const e=S.expenses.find(x=>x.id===id);if(!e)return;
@@ -1844,12 +1903,30 @@ function openExpEdit(id){
     ${!e.fromTreasury?`<div class="iw"><label class="il">Кто платил</label>
       <select class="inp" id="ed-payer" style="cursor:pointer">${payerOpts}</select>
     </div>`:''}
-    <div style="display:flex;gap:8px;margin-top:8px">
+    ${e.items&&e.items.length?`
+    <div style="margin-top:14px">
+      <div class="il" style="font-weight:600;margin-bottom:6px">Позиции заказа</div>
+      <div id="ed-items-list"></div>
+    </div>`:''}
+    <div style="display:flex;gap:8px;margin-top:12px">
       <button class="btn btn-g btn-fw" onclick="showExpDetail('${e.id}')">Отмена</button>
       <button class="btn btn-p btn-fw" onclick="saveExpEdit('${e.id}')"><i data-lucide="check" style="width:14px;height:14px"></i> Сохранить</button>
     </div>
   `;
   initializeIcons();
+  // Инициализируем редактор позиций если есть items
+  if(e.items&&e.items.length){
+    _editItems=e.items.map(it=>({
+      name:it.name||'',
+      price:parseFloat(it.price)||0,
+      assignees:it.assignees&&it.assignees.length?[...it.assignees]
+               :(it.assignedTo&&it.assignedTo!=='Все'?[it.assignedTo]
+               :S.members.map(m=>m.name))
+    }));
+    _renderEditItemsList();
+  } else {
+    _editItems=[];
+  }
 }
 
 function saveExpEdit(id){
@@ -1864,8 +1941,21 @@ function saveExpEdit(id){
   if(!name){toast('⚠️ Введите название');return;}
   if(!amount||amount<=0){toast('⚠️ Введите сумму');return;}
   if(e.fromTreasury&&e.amount!==amount)S.treasury.spent=S.treasury.spent-e.amount+amount;
-  // Если у расхода есть персональные доли (из «Заказ»), пересчитываем их пропорционально
-  if(e.splits&&Object.keys(e.splits).length&&e.amount&&e.amount!==amount){
+  // Если редактировались позиции — пересчитываем splits и participants из них
+  if(_editItems.length){
+    const items=_editItems.filter(it=>it.name.trim()||it.price>0);
+    const newSplits={};const newParts=new Set();
+    items.forEach(it=>{
+      const n=it.assignees.length;if(!n)return;
+      const pp=Math.round(it.price/n*100)/100;
+      it.assignees.forEach(a=>{newSplits[a]=Math.round(((newSplits[a]||0)+pp)*100)/100;newParts.add(a);});
+    });
+    e.items=items.map(it=>({name:it.name,price:it.price,qty:1,assignees:it.assignees}));
+    e.splits=Object.keys(newSplits).length?newSplits:null;
+    e.participants=[...newParts];
+    _editItems=[];
+  } else if(e.splits&&Object.keys(e.splits).length&&e.amount&&e.amount!==amount){
+    // Нет редактора позиций — масштабируем splits пропорционально новой сумме
     const ratio=amount/e.amount;
     const newSplits={};
     Object.entries(e.splits).forEach(([person,val])=>{
