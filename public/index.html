@@ -1869,7 +1869,7 @@ function _editItemTgl(i,name){
 }
 function _editItemDel(i){_editItems.splice(i,1);_renderEditItemsList();}
 function _editItemAdd(){
-  _editItems.push({name:'',price:0,assignees:[S.me||S.members[0]?.name||'']});
+  _editItems.push({name:'',price:0,assignees:[]});
   _renderEditItemsList();
   setTimeout(()=>{const ins=document.querySelectorAll('[id^="edi-n-"]');if(ins.length)ins[ins.length-1].focus();},60);
 }
@@ -3072,7 +3072,7 @@ Text:\n${t}`}]})
   document.getElementById('mo-loading').style.display='none';
   if(!items.length){toast('⚠️ Не удалось распознать. Проверьте формат.');return}
   // Добавляем новые позиции к существующим, assignees = [текущий пользователь]
-  _moItems=[..._moItems,...items.map(it=>({...it,assignees:[S.me]}))];
+  _moItems=[..._moItems,...items.map(it=>({...it,assignees:[]}))];
   document.getElementById('mo-txt').value='';
   if(!document.getElementById('mo-exp-name').value)document.getElementById('mo-exp-name').value='Заказ';
   _moShowResult();
@@ -3183,7 +3183,7 @@ function addMoItemManual(fromHint){
   const name=(nameEl?nameEl.value.trim():'');
   const price=parseFloat(priceEl?priceEl.value:'')||0;
   if(!name){toast('⚠️ Введите название позиции');return;}
-  _moItems.push({name,price,qty:1,assignees:[S.me]});
+  _moItems.push({name,price,qty:1,assignees:[]});
   if(nameEl)nameEl.value='';if(priceEl)priceEl.value='';
   _moShowResult();
   if(!document.getElementById('mo-exp-name').value)document.getElementById('mo-exp-name').value='Заказ';
