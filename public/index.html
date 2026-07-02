@@ -1499,23 +1499,24 @@ function renderDash(){
   if(!myOwe.length&&!myOwed.length){
     myEl.innerHTML='<div class="emp" style="padding:14px"><div class="emp-t">Вы в балансе 🎉</div></div>'
   } else {
+    window._myBalanceDebts={owe:myOwe,owed:myOwed};
     myEl.innerHTML=[
-      ...myOwe.map(d=>`<div class="dr">
+      ...myOwe.map((d,i)=>`<div class="dr" style="cursor:pointer" data-action="open-balance-detail" data-type="owe" data-idx="${i}">
         ${dbAvatar(d.toInfo)}
         <div style="flex:1;font-size:0.86rem">
           <span style="color:${ac(S.me)};font-weight:600">${escHtml(S.me)}</span>
           <span style="color:var(--t2)"> ${owes(S.me)} </span>
           ${dbLabel(d.toInfo)}
         </div>
-        <div class="da neg">-${fm(d.amount)} €</div>
+        <div style="display:flex;align-items:center;gap:6px"><div class="da neg">-${fm(d.amount)} €</div><i data-lucide="chevron-right" style="width:13px;height:13px;color:var(--t3)"></i></div>
       </div>`),
-      ...myOwed.map(d=>`<div class="dr">
+      ...myOwed.map((d,i)=>`<div class="dr" style="cursor:pointer" data-action="open-balance-detail" data-type="owed" data-idx="${i}">
         ${dbAvatar(d.fromInfo)}
         <div style="flex:1;font-size:0.86rem">
           ${dbLabel(d.fromInfo)}
           <span style="color:var(--t2)"> ${d.fromInfo.isGroup?'должны':''+owes(d.fromInfo.members[0])} вам</span>
         </div>
-        <div class="da pos">+${fm(d.amount)} €</div>
+        <div style="display:flex;align-items:center;gap:6px"><div class="da pos">+${fm(d.amount)} €</div><i data-lucide="chevron-right" style="width:13px;height:13px;color:var(--t3)"></i></div>
       </div>`)
     ].join('')
   }
@@ -2310,6 +2311,64 @@ function showGroupDebtDetail(fromInfo,toInfo,amount){
   openModal('m-debt-detail');initializeIcons();
 }
 
+function openBalanceDetail(fromInfo,toInfo,totalAmount){
+  const fromMembers=fromInfo.members;
+  const toMembers=toInfo.members;
+  // Per-expense breakdown: toMembers paid, fromMembers owe
+  const items=[];
+  S.expenses.forEach(e=>{
+    if(e.fromTreasury)return;
+    if(!toMembers.includes(e.paidBy))return;
+    let owed=0;
+    if(e.splits&&Object.keys(e.splits).length){
+      fromMembers.forEach(m=>{if(e.splits[m])owed+=e.splits[m];});
+    }else{
+      const ps=perShare(e);
+      fromMembers.forEach(m=>{if(e.participants.includes(m))owed+=ps*unitsForExp(e,m);});
+    }
+    owed=Math.round(owed*100)/100;
+    if(owed>0.01)items.push({e,owed});
+  });
+  items.sort((a,b)=>(b.e.date||'').localeCompare(a.e.date||''));
+  const fromLabel=fromInfo.isGroup?fromInfo.members.join(' + '):fromInfo.key;
+  const toLabel=toInfo.isGroup?toInfo.members.join(' + '):toInfo.key;
+  const grossOwed=Math.round(items.reduce((s,i)=>s+i.owed,0)*100)/100;
+  const cnt=items.length;
+  const html=`<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px">
+    <div><div style="font-weight:700;font-size:1.1rem">Из чего сложилась сумма</div>
+    <div style="font-size:0.82rem;color:var(--t2);margin-top:3px"><span style="font-weight:600;color:var(--red)">${escHtml(fromLabel)}</span> → <span style="font-weight:600;color:${ac(toLabel)}">${escHtml(toLabel)}</span></div></div>
+    <button class="btn btn-g btn-sm btn-ic" onclick="closeModal('m-debt-detail')"><i data-lucide="x" style="width:15px;height:15px"></i></button>
+  </div>
+  <div class="hero" style="padding:16px;text-align:left;margin-bottom:14px">
+    <div style="font-size:0.76rem;color:var(--t2);margin-bottom:4px">Итого к получению</div>
+    <div style="font-size:2rem;font-weight:700;font-family:var(--mono);color:var(--green)">+${fm(totalAmount)} €</div>
+    ${Math.abs(grossOwed-totalAmount)>0.05?`<div style="font-size:0.72rem;color:var(--t3);margin-top:4px">Брутто ${fm(grossOwed)} € (с учётом взаимозачёта)</div>`:''}
+  </div>
+  ${cnt===0
+    ?'<div style="color:var(--t2);font-size:0.85rem;text-align:center;padding:16px">Расходы не найдены</div>'
+    :`<div style="font-size:0.75rem;color:var(--t2);font-weight:600;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.05em">${cnt} расход${cnt===1?'':cnt<5?'а':'ов'} · нажмите для деталей</div>
+    ${items.map(({e,owed})=>`<div class="er" onclick="closeModal('m-debt-detail');showExpDetail('${e.id}')" style="cursor:pointer">
+      <div style="width:38px;height:38px;border-radius:var(--rxs);background:var(--s2);display:flex;align-items:center;justify-content:center;font-size:1.2rem;flex-shrink:0">${e.items&&e.items.length?'🍽️':'💳'}</div>
+      <div class="ei">
+        <div class="en">${escHtml(e.name)}${e.items&&e.items.length?`<span style="font-size:0.65rem;background:rgba(108,99,255,0.18);color:var(--ac2);padding:1px 5px;border-radius:4px;margin-left:5px;vertical-align:middle">${e.items.length} поз.</span>`:''}</div>
+        <div class="em" style="flex-direction:column;align-items:flex-start;gap:2px;margin-top:3px">
+          ${e.date?`<span style="color:var(--t3)">📅 ${fdate(e.date)}</span>`:''}
+          <span>${paidVerb(e.paidBy)} <span style="color:${ac(e.paidBy)};font-weight:600">${escHtml(e.paidBy)}</span></span>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:7px;flex-shrink:0">
+        <div style="text-align:right">
+          <div style="font-family:var(--mono);font-weight:700;font-size:0.95rem;color:var(--red)">-${fm(owed)} €</div>
+          <div style="font-size:0.68rem;color:var(--t2)">из ${fm(e.amount)} €</div>
+        </div>
+        <i data-lucide="chevron-right" style="width:14px;height:14px;color:var(--t3)"></i>
+      </div>
+    </div>`).join('')}`
+  }`;
+  document.getElementById('m-debt-detail-content').innerHTML=html;
+  openModal('m-debt-detail');initializeIcons();
+}
+
 // ── Pessimistic settle: ждёт подтверждения Supabase перед обновлением UI ───
 // gd        — объект долга из groupedDebtStore
 // settleBtn — кнопка, которую нажал пользователь (для loading state)
@@ -2413,6 +2472,12 @@ async function handleDebtAction(e){
       return;
     }
     showDebtDetail(gd.fromInfo.members[0],gd.toInfo.members[0],gd.amount);
+
+  }else if(action==='open-balance-detail'){
+    const type=actionEl.dataset.type;
+    const idx=parseInt(actionEl.dataset.idx);
+    const debt=window._myBalanceDebts?.[type]?.[idx];
+    if(debt)openBalanceDetail(debt.fromInfo,debt.toInfo,debt.amount);
 
   }else if(action==='settle-from-modal'){
     // Кнопка «Погасить всё» внутри модала.
